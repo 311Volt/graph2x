@@ -9,6 +9,8 @@
 #include <unordered_set>
 #include <algorithm>
 #include <deque>
+#include <set>
+#include <unordered_map>
 
 namespace g2x {
 
@@ -118,7 +120,7 @@ namespace g2x {
 
 	class static_graph {
 		std::vector<vertex_idx> storage;
-		std::vector<std::span<vertex_idx>> outgoing_segments;
+		std::vector<std::span<vertex_idx>> no_rep_segments;
 		std::vector<std::span<vertex_idx>> segments;
 	public:
 
@@ -126,6 +128,41 @@ namespace g2x {
 		struct directed_edgelist_tag_t {};
 		struct undirected_adjlist_tag_t {};
 		struct undirected_edgelist_tag_t {};
+
+		static_graph(undirected_edgelist_tag_t _, int num_vertices, std::ranges::range auto edges) {
+			std::vector<std::set<vertex_idx>> adjacency(num_vertices);
+			for(const auto& [u, v]: edges) {
+				adjacency[u].insert(v);
+				adjacency[v].insert(u);
+			}
+
+
+			std::vector<std::pair<vertex_idx, vertex_idx>> no_rep_segments_indices;
+			std::vector<std::pair<vertex_idx, vertex_idx>> segments_indices;
+
+			for(int u=0; u<num_vertices; u++) {
+				int idx_seg_begin = storage.size();
+				int idx_nr_seg_end = idx_seg_begin;
+				int idx_seg_end = idx_seg_begin;
+
+				for(const auto& v: adjacency[u]) {
+					storage.push_back(v);
+					if(v < u) {
+						++idx_nr_seg_end;
+					}
+					++idx_seg_end;
+				}
+				no_rep_segments_indices.emplace_back(idx_seg_begin, idx_nr_seg_end);
+				segments_indices.emplace_back(idx_seg_begin, idx_seg_end);
+			}
+
+			for(const auto& [u, v]: no_rep_segments_indices) {
+				no_rep_segments.emplace_back(&storage[u], &storage[v]);
+			}
+			for(const auto& [u, v]: segments_indices) {
+				segments.emplace_back(&storage[u], &storage[v]);
+			}
+		}
 
 		[[nodiscard]] vertex_idx num_vertices() const {
 			return segments.size();
@@ -136,7 +173,7 @@ namespace g2x {
 		}
 
 		[[nodiscard]] bool is_adjacent(vertex_idx u, vertex_idx v) const {
-			return std::ranges::end(segments) != std::ranges::lower_bound(segments.at(u), v);
+			return std::ranges::lower_bound(segments[u], v) != segments[u].end();
 		}
 
 		[[nodiscard]] auto adjacent_vertices(vertex_idx idx) const {
@@ -144,7 +181,7 @@ namespace g2x {
 		}
 
 		[[nodiscard]] auto outgoing_edges(vertex_idx idx) const {
-			return outgoing_segments[idx] | std::views::transform([idx](vertex_idx dst) {
+			return segments[idx] | std::views::transform([idx](vertex_idx dst) {
 				return std::pair{idx, dst};
 			});
 		}
@@ -155,11 +192,11 @@ namespace g2x {
 
 		[[nodiscard]] auto all_edges() const {
 			return detail::rust_like_range([this, seg=vertex_idx(0), idx=vertex_idx(0)]() mutable -> std::optional<std::pair<vertex_idx, vertex_idx>> {
-				if(seg >= outgoing_segments.size()) {
+				if(seg >= no_rep_segments.size()) {
 					return std::nullopt;
 				}
-				auto edge = std::pair{seg, outgoing_segments[seg][idx]};
-				if(idx >= outgoing_segments[seg].size()) {
+				auto edge = std::pair{seg, no_rep_segments[seg][idx]};
+				if(idx >= no_rep_segments[seg].size()) {
 					++seg;
 					idx = 0;
 				}
@@ -211,25 +248,32 @@ namespace g2x {
 			return detail::rust_like_range(
 				[
 					&graph,
-					bfs_queue = std::deque<int>(1, root),
-					source = std::vector<int>(num_vertices(graph), -1),
-					visited = std::vector<char>(num_vertices(graph), 0)
+					bfs_queue = std::deque<vertex_idx>(1, root),
+					source = std::vector<vertex_idx>(num_vertices(graph), -1),
+					visited = std::vector<char>(num_vertices(graph), 0),
+					init = true
 				]() mutable {
 					using result_type = std::optional<std::pair<int, int>>;
-					if(bfs_queue.empty()) {
-						return std::nullopt;
-					}
-					int curr = bfs_queue.front();
-					bfs_queue.pop_front();
 
-					for(const auto& v: adjacent_vertices(graph, curr)) {
-						if(not visited[v]) {
-							bfs_queue.push_back(v);
-							source[v] = curr;
+					vertex_idx curr {};
+					for(int i=0; i<1 + int(init); i++) {
+						if(bfs_queue.empty()) {
+							return result_type {};
+						}
+						curr = bfs_queue.front();
+						bfs_queue.pop_front();
+						visited[curr] = 1;
+
+						for(const auto& v: adjacent_vertices(graph, curr)) {
+							if(not visited[v] && source[v] < 0) {
+								bfs_queue.push_back(v);
+								source[v] = curr;
+							}
 						}
 					}
-					visited[curr] = 1;
-					return std::pair {source[curr], curr};
+					init = false;
+
+					return result_type {std::pair {source[curr], curr}};
 				}
 			);
 		}
@@ -239,25 +283,32 @@ namespace g2x {
 			return detail::rust_like_range(
 				[
 					&graph,
-					dfs_stack = std::vector<int>(1, root),
-					source = std::vector<int>(num_vertices(graph), -1),
-					visited = std::vector<char>(num_vertices(graph), 0)
-					]() mutable {
-						using result_type = std::optional<std::pair<int, int>>;
+					dfs_stack = std::vector<vertex_idx>(1, root),
+					source = std::vector<vertex_idx>(num_vertices(graph), -1),
+					visited = std::vector<char>(num_vertices(graph), 0),
+					init = true
+				]() mutable {
+					using result_type = std::optional<std::pair<int, int>>;
+
+					vertex_idx curr {};
+					for(int i=0; i<1 + int(init); i++) {
 						if(dfs_stack.empty()) {
-							return std::nullopt;
+							return result_type {};
 						}
-						int curr = dfs_stack.back();
+						curr = dfs_stack.back();
 						dfs_stack.pop_back();
+						visited[curr] = 1;
 
 						for(const auto& v: adjacent_vertices(graph, curr)) {
-							if(not visited[v]) {
+							if(not visited[v] && source[v] < 0) {
 								dfs_stack.push_back(v);
 								source[v] = curr;
 							}
 						}
-						visited[curr] = 1;
-						return std::pair {source[curr], curr};
+					}
+					init = false;
+
+					return result_type {std::pair {source[curr], curr}};
 				}
 			);
 		}
