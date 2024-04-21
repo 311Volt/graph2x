@@ -9,6 +9,7 @@
 #include <unordered_set>
 #include <algorithm>
 #include <deque>
+#include <limits>
 #include <set>
 #include <unordered_map>
 
@@ -31,20 +32,60 @@ namespace g2x {
 	 * 	all_vertices(graph) -> range<int>
 	 * 	all_edges(graph) -> range<EdgeType>
 	 *
+	 * vertex index: integral type
+	 *
+	 * edge free function interface:
+	 *  first_vertex(edge) -> VIdxT
+	 *  second_vertex(edge) -> VIdxT
+	 *  [SFINAE - for directed only] source_vertex(edge) -> VIdxT
+	 *  [SFINAE - for directed only] target_vertex(edge) -> VIdxT
+	 *  edge_weight(edge) -> any
+	 *
+	 *
 	 * graph mutation:
 	 *  add_vertex(graph) -> vertex_idx
-	 *  add_edge(graph, u, v) -> bool?
+	 *  add_edge(graph, u, v, opt_weight) -> bool?
+	 *  delete_vertex(graph)
+	 *
+	 * possible vertex index types:
+	 *	- is_integral -> std::vector storage
+	 *	- comparable -> std::map storage
+	 *	- hashable -> std::unordered_map storage
 	 *
 	 * basic algorithms:
-	 *  breadth_first_search(graph, root=0) -> range<EdgeType>
-	 *  depth_first_search(graph, root=0) -> range<EdgeType>
+	 *  - breadth_first_search(graph, root=0) -> range<EdgeType>
+	 *  - depth_first_search(graph, root=0) -> range<EdgeType>
+	 *
+	 * advanced algorithms:
+	 *  - bipartite_decompose(graph, out_u, out_v)
+	 *  - find_augmenting_path(graph, matching: rar[edges]) -> vector<EdgeIdxT>
+	 *  - maximum_matching(graph, out_e)
+	 *  - max_bipartite_matching(graph, out_e)
+	 *  - max_weight_bipartite_matching(graph, out_e)
 	 *
 	 * graph creation:
 	 * 	create_graph_from_edges<StorageClass>(<range of pairs>)
 	 *	create_graph_from_adj_lists<StorageClass>(<range>)
 	 *
-	 * storage classes:
-	 * 	
+	 * graph kinds:
+	 *  - simple undirected
+	 *  - simple directed
+	 *  - weighted/unweighted
+	 *  - single/multiple edge
+	 *
+	 * graph classes:
+	 *  - static_sparse_graph
+	 *  - static_dense_graph
+	 *  - dynamic_sparse_graph
+	 *  - dynamic_dense_graph
+	 *
+	 * graph member typedefs:
+	 *  - vertex_id_type (integral/comparable/hashable)
+	 *  - edge_id_type (integral/pair<vid,vid>)
+	 *
+	 * static/dynamic:
+	 *  - static = is_integral<edge_index_type> && is_adjacent() at most log(E)
+	 *  - dynamic = provides
 	 */
 
 	using vertex_idx = int64_t;
@@ -103,105 +144,119 @@ namespace g2x {
 	}
 
 
-	template<typename TRange>
-	concept graph_adjlist_range = requires {
-		requires std::ranges::sized_range<TRange>;
-		requires std::ranges::random_access_range<TRange>;
-		requires std::ranges::forward_range<std::ranges::range_value_t<TRange>>;
-		requires std::integral<std::ranges::range_value_t<std::ranges::range_value_t<TRange>>>;
-	};
+	class static_simple_graph {
+	public:
+		struct edge_type {
+			int u;
+			int v;
+			int idx = -1;
 
-	template<typename TRange>
-	concept graph_edge_range = requires(TRange r) {
-		requires std::ranges::forward_range<TRange>;
-		//TODO remaining constraints
-	};
+			friend auto operator<=>(const edge_type& e1, const edge_type& e2) = default;
+		};
+	private:
+		int num_vertices_;
 
+		//edges, in lexicographical order, duplicated
+		std::vector<edge_type> edge_storage;
 
-	class static_graph {
-		std::vector<vertex_idx> storage;
-		std::vector<std::span<vertex_idx>> no_rep_segments;
-		std::vector<std::span<vertex_idx>> segments;
+		//subspans of edge_storage where the i-th element spans all edges adjacent to vertex v_i
+		std::vector<std::span<edge_type>> adjacency_partitions;
+
+		//i-th element is the index to edge_storage to one of the two edges that satisfy i==idx
+		std::vector<int> offset_of_edge;
+
 	public:
 
-		struct directed_adjlist_tag_t {};
-		struct directed_edgelist_tag_t {};
-		struct undirected_adjlist_tag_t {};
-		struct undirected_edgelist_tag_t {};
+		bool is_directed = false;
 
-		static_graph(undirected_edgelist_tag_t _, int num_vertices, std::ranges::range auto edges) {
-			std::vector<std::set<vertex_idx>> adjacency(num_vertices);
-			for(const auto& [u, v]: edges) {
-				adjacency[u].insert(v);
-				adjacency[v].insert(u);
-			}
+		static_simple_graph(int num_vertices, std::ranges::forward_range auto&& edges) {
+			this->num_vertices_ = num_vertices;
 
-
-			std::vector<std::pair<vertex_idx, vertex_idx>> no_rep_segments_indices;
-			std::vector<std::pair<vertex_idx, vertex_idx>> segments_indices;
-
-			for(int u=0; u<num_vertices; u++) {
-				int idx_seg_begin = storage.size();
-				int idx_nr_seg_end = idx_seg_begin;
-				int idx_seg_end = idx_seg_begin;
-
-				for(const auto& v: adjacency[u]) {
-					storage.push_back(v);
-					if(v < u) {
-						++idx_nr_seg_end;
-					}
-					++idx_seg_end;
+			std::set<edge_type> edge_set;
+			for(int i=0; const auto& [vtx1, vtx2]: edges) {
+				if(vtx1 == vtx2) {
+					throw std::runtime_error("loops are not allowed");
 				}
-				no_rep_segments_indices.emplace_back(idx_seg_begin, idx_nr_seg_end);
-				segments_indices.emplace_back(idx_seg_begin, idx_seg_end);
+				int index_of_edge = i++;
+
+				int u = std::min(vtx1, vtx2);
+				int v = std::max(vtx1, vtx2);
+				edge_set.emplace(u, v, index_of_edge);
+				edge_set.emplace(v, u, index_of_edge);
 			}
 
-			for(const auto& [u, v]: no_rep_segments_indices) {
-				no_rep_segments.emplace_back(&storage[u], &storage[v]);
+			edge_storage = {edge_set.begin(), edge_set.end()};
+
+			offset_of_edge.resize(edge_storage.size());
+			for(int off=0; off<edge_storage.size(); off++) {
+				const auto& [u, v, i] = edge_storage[off];
+				if(u < v) {
+					offset_of_edge[i] = off;
+				}
 			}
-			for(const auto& [u, v]: segments_indices) {
-				segments.emplace_back(&storage[u], &storage[v]);
+
+			adjacency_partitions.resize(num_vertices);
+			for(int v=0; v<num_vertices; v++) {
+				auto begin = std::ranges::lower_bound(edge_storage, edge_type{v, 0});
+				auto end = std::ranges::lower_bound(edge_storage, edge_type{v+1, 0});
+				adjacency_partitions[v] = std::span{begin, end};
 			}
+
+
 		}
 
-		[[nodiscard]] vertex_idx num_vertices() const {
-			return segments.size();
+		[[nodiscard]] int num_vertices() const {
+			return num_vertices_;
 		}
 
-		[[nodiscard]] vertex_idx num_edges() const {
-			return storage.size();
+		[[nodiscard]] int num_edges() const {
+			return edge_storage.size();
 		}
 
-		[[nodiscard]] bool is_adjacent(vertex_idx u, vertex_idx v) const {
-			return std::ranges::lower_bound(segments[u], v) != segments[u].end();
+		[[nodiscard]] bool is_adjacent(int u, int v) const {
+			const auto a1 = std::ranges::lower_bound(edge_storage, edge_type{u, v});
+			const auto a2 = std::ranges::lower_bound(edge_storage, edge_type{u, v+1});
+
+			return std::distance(a1, a2) != 0;
 		}
 
-		[[nodiscard]] auto adjacent_vertices(vertex_idx idx) const {
-			return segments.at(idx);
+		[[nodiscard]] auto outgoing_edges(int u) const {
+			return adjacency_partitions.at(u);
 		}
 
-		[[nodiscard]] auto outgoing_edges(vertex_idx idx) const {
-			return segments[idx] | std::views::transform([idx](vertex_idx dst) {
-				return std::pair{idx, dst};
+		[[nodiscard]] auto adjacent_vertices(int u) const {
+			return outgoing_edges(u) | std::views::transform([](auto&& edge) {
+				const auto& [u1, v1, i] = edge;
+				return v1;
 			});
 		}
 
-		[[nodiscard]] auto all_vertices() const {
+		[[nodiscard]] auto edge_at(int index) const {
+			return edge_storage[offset_of_edge[index]];
+		}
+
+		[[nodiscard]] auto edge_idx_func() const {
+			return [this](int idx) {
+				return edge_at(idx);
+			};
+		}
+
+		[[nodiscard]] auto all_vertices(int u) const {
 			return std::views::iota(0, num_vertices());
 		}
 
-		[[nodiscard]] auto all_edges() const {
-			return detail::rust_like_range([this, seg=vertex_idx(0), idx=vertex_idx(0)]() mutable -> std::optional<std::pair<vertex_idx, vertex_idx>> {
-				if(seg >= no_rep_segments.size()) {
-					return std::nullopt;
-				}
-				auto edge = std::pair{seg, no_rep_segments[seg][idx]};
-				if(idx >= no_rep_segments[seg].size()) {
-					++seg;
-					idx = 0;
-				}
-				return edge;
-			});
+		[[nodiscard]] auto all_edges(int u) const {
+			return std::views::iota(0, num_edges()) | std::views::transform(edge_idx_func());
+		}
+
+		template<typename T>
+		[[nodiscard]] auto create_vertex_label_container(T value = {}) const {
+			return std::vector<T>(num_vertices(), value);
+		}
+
+		template<typename T>
+		[[nodiscard]] auto create_edge_label_container(T value = {}) const {
+			return std::vector<T>(num_edges(), value);
 		}
 	};
 
@@ -227,7 +282,7 @@ namespace g2x {
 
 	template<typename GraphT>
 	auto outgoing_edges(GraphT&& graph, int v) {
-		return graph.adjacent_vertices(v);
+		return graph.outgoing_edges(v);
 	}
 
 	template<typename GraphT>
@@ -240,80 +295,86 @@ namespace g2x {
 		return graph.all_edges();
 	}
 
+	namespace algo {
 
-	inline namespace algo {
+		template<typename GraphT, typename IdxOrRangeT>
+		auto breadth_first_search_edges(GraphT&& graph, IdxOrRangeT&& start = {}) {
 
-		template<typename TGraph>
-		auto breadth_first_search(TGraph&& graph, vertex_idx root = 0) {
+			using edge_type = typename std::remove_cvref_t<GraphT>::edge_type;
+
+			int graph_num_vtxs = num_vertices(graph);
+			std::vector<std::pair<int, std::optional<edge_type>>> initial_bfs_queue;
+			if constexpr(std::ranges::forward_range<std::remove_cvref_t<IdxOrRangeT>>) {
+				for(auto& v: start) {
+					if(v < 0 || v >= graph_num_vtxs) {
+						throw std::runtime_error("invalid start vertex: " + std::to_string(v));
+					}
+					initial_bfs_queue.emplace_back(v, std::nullopt);
+				}
+			} else {
+				initial_bfs_queue.emplace_back(start, std::nullopt);
+			}
+			int start_size = initial_bfs_queue.size();
+			initial_bfs_queue.resize(graph_num_vtxs);
+
+			enum class vtx_color: char {
+				unvisited,
+				marked,
+				visited
+			};
+
+
 			return detail::rust_like_range(
 				[
 					&graph,
-					bfs_queue = std::deque<vertex_idx>(1, root),
-					source = std::vector<vertex_idx>(num_vertices(graph), -1),
-					visited = std::vector<char>(num_vertices(graph), 0),
-					init = true
-				]() mutable {
-					using result_type = std::optional<std::pair<int, int>>;
+					bfs_queue = std::vector{std::move(initial_bfs_queue)},
+					bfs_queue_head = start_size,
+					bfs_queue_tail = 0,
+					color = std::vector<vtx_color>(graph_num_vtxs, vtx_color::unvisited)
+				] mutable -> std::optional<typename std::remove_cvref_t<GraphT>::edge_type>
+				{
+				skip_source_vertex:
+					if(bfs_queue_tail < bfs_queue_head) {
+						auto [vtx, opt_edge] = bfs_queue.at(bfs_queue_tail++);
+						printf("visiting %d\n", vtx);
+						color[vtx] = vtx_color::visited;
 
-					vertex_idx curr {};
-					for(int i=0; i<1 + int(init); i++) {
-						if(bfs_queue.empty()) {
-							return result_type {};
-						}
-						curr = bfs_queue.front();
-						bfs_queue.pop_front();
-						visited[curr] = 1;
-
-						for(const auto& v: adjacent_vertices(graph, curr)) {
-							if(not visited[v] && source[v] < 0) {
-								bfs_queue.push_back(v);
-								source[v] = curr;
+						for(const auto& edge: outgoing_edges(graph, vtx)) {
+							const auto& [u, v, i] = edge;
+							if(color[v] == vtx_color::unvisited) {
+								printf("adding %d [%d, %d, %d]\n", v, u, v, i);
+								bfs_queue.at(bfs_queue_head++) = {v, edge};
+								color[v] = vtx_color::marked;
 							}
 						}
-					}
-					init = false;
 
-					return result_type {std::pair {source[curr], curr}};
+						if(opt_edge.has_value()) {
+							return *opt_edge;
+						} else {
+							goto skip_source_vertex;
+						}
+
+					} else {
+						return std::nullopt;
+					}
 				}
 			);
 		}
 
-		template<typename TGraph>
-		auto depth_first_search(TGraph&& graph, vertex_idx root = 0) {
-			return detail::rust_like_range(
-				[
-					&graph,
-					dfs_stack = std::vector<vertex_idx>(1, root),
-					source = std::vector<vertex_idx>(num_vertices(graph), -1),
-					visited = std::vector<char>(num_vertices(graph), 0),
-					init = true
-				]() mutable {
-					using result_type = std::optional<std::pair<int, int>>;
+		auto breadth_first_search_vertices() {
+			throw std::runtime_error("unimplemented");
+		}
 
-					vertex_idx curr {};
-					for(int i=0; i<1 + int(init); i++) {
-						if(dfs_stack.empty()) {
-							return result_type {};
-						}
-						curr = dfs_stack.back();
-						dfs_stack.pop_back();
-						visited[curr] = 1;
+		auto depth_first_search_edges() {
+			throw std::runtime_error("unimplemented");
+		}
 
-						for(const auto& v: adjacent_vertices(graph, curr)) {
-							if(not visited[v] && source[v] < 0) {
-								dfs_stack.push_back(v);
-								source[v] = curr;
-							}
-						}
-					}
-					init = false;
-
-					return result_type {std::pair {source[curr], curr}};
-				}
-			);
+		auto depth_first_search_vertices() {
+			throw std::runtime_error("unimplemented");
 		}
 
 	}
+
 
 }
 

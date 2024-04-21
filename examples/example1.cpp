@@ -16,10 +16,10 @@ int main() {
 		{4, 5}
 	};
 
-	g2x::static_graph graph(g2x::static_graph::undirected_edgelist_tag_t{}, num_vertices, graph_data);
-	std::vector<int> distances(g2x::num_vertices(graph), 0);
+	g2x::static_simple_graph graph(num_vertices, graph_data);
+	std::vector<int> distances(graph.num_vertices(), 0);
 
-	for(const auto& [u, v]: g2x::breadth_first_search(graph)) {
+	for(const auto& [u, v, i]: g2x::algo::breadth_first_search_edges(graph, 0)) {
 		distances[v] = distances[u]+1;
 	}
 
