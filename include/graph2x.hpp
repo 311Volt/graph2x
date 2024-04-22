@@ -8,6 +8,7 @@
 #include <ranges>
 #include <unordered_set>
 #include <algorithm>
+#include <assert.h>
 #include <deque>
 #include <limits>
 #include <set>
@@ -141,6 +142,19 @@ namespace g2x {
 			}
 		};
 
+		struct always_true {
+			template<typename... Ts>
+			bool operator()(Ts&&...) {
+				return true;
+			}
+		};
+
+		struct always_false {
+			template<typename... Ts>
+			bool operator()(Ts&&...) {
+				return true;
+			}
+		};
 	}
 
 
@@ -175,11 +189,12 @@ namespace g2x {
 			this->num_vertices_ = num_vertices;
 
 			std::set<edge_type> edge_set;
-			for(int i=0; const auto& [vtx1, vtx2]: edges) {
+			int num_edges = 0;
+			for(const auto& [vtx1, vtx2]: edges) {
 				if(vtx1 == vtx2) {
 					throw std::runtime_error("loops are not allowed");
 				}
-				int index_of_edge = i++;
+				int index_of_edge = num_edges++;
 
 				int u = std::min(vtx1, vtx2);
 				int v = std::max(vtx1, vtx2);
@@ -189,7 +204,7 @@ namespace g2x {
 
 			edge_storage = {edge_set.begin(), edge_set.end()};
 
-			offset_of_edge.resize(edge_storage.size());
+			offset_of_edge.resize(num_edges);
 			for(int off=0; off<edge_storage.size(); off++) {
 				const auto& [u, v, i] = edge_storage[off];
 				if(u < v) {
@@ -212,7 +227,7 @@ namespace g2x {
 		}
 
 		[[nodiscard]] int num_edges() const {
-			return edge_storage.size();
+			return offset_of_edge.size();
 		}
 
 		[[nodiscard]] bool is_adjacent(int u, int v) const {
@@ -243,12 +258,14 @@ namespace g2x {
 			};
 		}
 
-		[[nodiscard]] auto all_vertices(int u) const {
+		[[nodiscard]] auto all_vertices() const {
 			return std::views::iota(0, num_vertices());
 		}
 
-		[[nodiscard]] auto all_edges(int u) const {
-			return std::views::iota(0, num_edges()) | std::views::transform(edge_idx_func());
+		[[nodiscard]] auto all_edges() const {
+			return offset_of_edge | std::views::transform([this](auto&& off) {
+				return edge_storage[off];
+			});
 		}
 
 		template<typename T>
@@ -313,13 +330,13 @@ namespace g2x {
 	}
 
 	template<typename GraphT>
-	using vertex_id_t = typename GraphT::vertex_id_type;
+	using vertex_id_t = typename std::remove_cvref_t<GraphT>::vertex_id_type;
 
 	template<typename GraphT>
-	using edge_id_t = typename GraphT::edge_id_type;
+	using edge_id_t = typename std::remove_cvref_t<GraphT>::edge_id_type;
 
 	template<typename GraphT>
-	using edge_t = typename GraphT::edge_type;
+	using edge_t = typename std::remove_cvref_t<GraphT>::edge_type;
 
 	enum class vertex_search_state {
 		unvisited,
@@ -391,7 +408,7 @@ namespace g2x {
 			std::vector<vertex_id_type> storage;
 		};
 
-		template<typename GraphT, template<class> class SearcherTTP>
+		template<typename GraphT, template<class> class SearcherTTP, typename EdgePredicateRefT = const detail::always_true&>
 		class generic_graph_search {
 		public:
 			using graph_type = GraphT;
@@ -399,11 +416,12 @@ namespace g2x {
 			using edge_id_type = edge_id_t<GraphT>;
 			using edge_type = edge_t<GraphT>;
 
-			explicit generic_graph_search(const GraphT& graph)
+			explicit generic_graph_search(const GraphT& graph, EdgePredicateRefT&& edge_predicate = edge_predicate_type{})
 				: graph(graph),
 					searcher(num_vertices(graph)),
 					edge_container(create_vertex_label_container(graph, edge_opt{})),
-					state_container(create_vertex_label_container(graph, vertex_search_state::unvisited))
+					state_container(create_vertex_label_container(graph, vertex_search_state::unvisited)),
+					edge_predicate(std::forward<EdgePredicateRefT>(edge_predicate))
 			{}
 
 			generic_graph_search(generic_graph_search&&) = default;
@@ -418,12 +436,15 @@ namespace g2x {
 				state_container[v] = vertex_search_state::marked;
 			}
 
-			vertex_id_type next_vertex() {
+			std::optional<vertex_id_type> next_vertex() {
+				if(is_finished()) {
+					return std::nullopt;
+				}
 				auto vtx = searcher.pop();
 				state_container[vtx] = vertex_search_state::visited;
 				for(auto& edge: outgoing_edges(graph, vtx)) {
 					const auto& [u, v, i] = edge;
-					if(get_vertex_state(v) == vertex_search_state::unvisited) {
+					if(edge_predicate(edge) && get_vertex_state(v) == vertex_search_state::unvisited) {
 						add_vertex(v);
 						edge_container[v] = edge;
 					}
@@ -436,10 +457,9 @@ namespace g2x {
 			}
 
 			std::optional<edge_type> next_edge() {
-				while(!is_finished()) {
-					auto v = next_vertex();
-					if(edge_container[v].has_value()) {
-						return *edge_container[v];
+				while(auto v_opt = next_vertex()) {
+					if(edge_container[*v_opt].has_value()) {
+						return *edge_container[*v_opt];
 					}
 				}
 				return std::nullopt;
@@ -458,6 +478,7 @@ namespace g2x {
 			using edge_opt = std::optional<edge_type>;
 			using edge_container_type = decltype(create_vertex_label_container<GraphT, edge_opt>(std::declval<GraphT>()));
 			using state_container_type = decltype(create_vertex_label_container<GraphT, vertex_search_state>(std::declval<GraphT>()));
+			using edge_predicate_type = std::remove_cvref_t<EdgePredicateRefT>;
 
 			const GraphT& graph;
 
@@ -465,16 +486,28 @@ namespace g2x {
 
 			edge_container_type edge_container;
 			state_container_type state_container;
+
+			edge_predicate_type edge_predicate;
 		};
 
-		template<typename GraphT>
-		struct breadth_first_search: public generic_graph_search<GraphT, bfs_queue> {
-			using generic_graph_search<GraphT, bfs_queue>::generic_graph_search;
+		template<typename GraphT, typename EdgePredicateRefT = const detail::always_true&>
+		struct breadth_first_search: public generic_graph_search<GraphT, bfs_queue, EdgePredicateRefT> {
+			using generic_graph_search<GraphT, bfs_queue, EdgePredicateRefT>::generic_graph_search;
+
+			using edge_predicate_type = std::remove_cvref_t<EdgePredicateRefT>;
+			explicit breadth_first_search(const GraphT& graph, EdgePredicateRefT&& edge_predicate = edge_predicate_type{})
+				: generic_graph_search<GraphT, bfs_queue, EdgePredicateRefT>(graph, std::forward<EdgePredicateRefT>(edge_predicate))
+			{}
 		};
 
-		template<typename GraphT>
-		struct depth_first_search: public generic_graph_search<GraphT, dfs_stack> {
-			using generic_graph_search<GraphT, dfs_stack>::generic_graph_search;
+		template<typename GraphT, typename EdgePredicateRefT = const detail::always_true&>
+		struct depth_first_search: public generic_graph_search<GraphT, dfs_stack, EdgePredicateRefT> {
+			using generic_graph_search<GraphT, dfs_stack, EdgePredicateRefT>::generic_graph_search;
+
+			using edge_predicate_type = std::remove_cvref_t<EdgePredicateRefT>;
+			explicit depth_first_search(const GraphT& graph, EdgePredicateRefT&& edge_predicate = edge_predicate_type{})
+				: generic_graph_search<GraphT, dfs_stack, EdgePredicateRefT>(graph, std::forward<EdgePredicateRefT>(edge_predicate))
+			{}
 		};
 
 		template<typename SearchT, typename IdxOrRangeT>
@@ -494,7 +527,7 @@ namespace g2x {
 			using graph_type = std::remove_cvref_t<GraphT>;
 			breadth_first_search<graph_type> bfs(graph);
 			generic_init_search(bfs, start);
-			return detail::rust_like_range([bfs = std::move(bfs)] mutable {
+			return detail::rust_like_range([bfs = std::move(bfs)]() mutable {
 				return bfs.next_edge();
 			});
 		}
@@ -502,14 +535,10 @@ namespace g2x {
 		template<typename GraphT, typename IdxOrRangeT>
 		auto simple_vertices_bfs(const GraphT& graph, IdxOrRangeT&& start = {}) {
 			using graph_type = std::remove_cvref_t<GraphT>;
-			breadth_first_search<graph_type> bfs(graph);
+			breadth_first_search bfs(graph);
 			generic_init_search(bfs, start);
-			return detail::rust_like_range([bfs = std::move(bfs)] mutable {
-				if(not bfs.is_finished()) {
-					return std::optional<vertex_id_t<graph_type>>(bfs.next_vertex());
-				} else {
-					return std::optional<vertex_id_t<graph_type>>();
-				}
+			return detail::rust_like_range([bfs = std::move(bfs)]() mutable {
+				return bfs.next_vertex();
 			});
 		}
 
@@ -518,7 +547,7 @@ namespace g2x {
 			using graph_type = std::remove_cvref_t<GraphT>;
 			depth_first_search<graph_type> dfs(graph);
 			generic_init_search(dfs, start);
-			return detail::rust_like_range([dfs = std::move(dfs)] mutable {
+			return detail::rust_like_range([dfs = std::move(dfs)]() mutable {
 				return dfs.next_edge();
 			});
 		}
@@ -526,14 +555,10 @@ namespace g2x {
 		template<typename GraphT, typename IdxOrRangeT>
 		auto simple_vertices_dfs(const GraphT& graph, IdxOrRangeT&& start = {}) {
 			using graph_type = std::remove_cvref_t<GraphT>;
-			depth_first_search<graph_type> dfs(graph);
+			depth_first_search dfs(graph);
 			generic_init_search(dfs, start);
-			return detail::rust_like_range([dfs = std::move(dfs)] mutable {
-				if(not dfs.is_finished()) {
-					return std::optional<vertex_id_t<graph_type>>(dfs.next_vertex());
-				} else {
-					return std::optional<vertex_id_t<graph_type>>();
-				}
+			return detail::rust_like_range([dfs = std::move(dfs)]() mutable {
+				return dfs.next_vertex();
 			});
 		}
 
@@ -541,13 +566,25 @@ namespace g2x {
 		template<typename GraphT>
 		auto bipartite_decompose(GraphT&& graph) {
 
-			auto labels = create_vertex_label_container<GraphT, char>(-1);
+			auto labels = create_vertex_label_container<GraphT, char>(graph, -1);
 
 			using result_type = std::optional<decltype(labels)>;
+			breadth_first_search bfs(graph);
 
 			for(const auto& vtx: all_vertices(graph)) {
-				for(const auto& [u, v, i]: breadth_first_search_edges(graph, vtx)) {
-
+				if(bfs.get_vertex_state(vtx) == vertex_search_state::unvisited) {
+					labels[vtx] = 0;
+					bfs.add_vertex(vtx);
+				}
+				while(auto opt_vtx = bfs.next_vertex()) {
+					const auto& u = *opt_vtx;
+					for(const auto& v: adjacent_vertices(graph, u)) {
+						assert(labels[u] >= 0);
+						if(labels[v] >= 0 && labels[v] == labels[u]) {
+							return result_type{std::nullopt}; //odd cycle detected - graph is not bipartite
+						}
+						labels[v] = !labels[u];
+					}
 				}
 			}
 
@@ -555,17 +592,71 @@ namespace g2x {
 		}
 
 		template<typename GraphT>
-		auto max_bipartite_matching(GraphT&& graph, std::output_iterator<edge_id_t<GraphT>> auto&& out_edges) {
+		auto find_bipartite_augmenting_path(GraphT&& graph, auto&& partitions, auto&& matching) {
+			using result_type = std::optional<std::vector<edge_id_t<GraphT>>>;
+
+			breadth_first_search search {graph, [&](auto&& edge) {
+				const auto& [u, v, i] = edge;
+				if(matching[i]) {
+					return partitions[u] == 1 && partitions[v] == 0;
+				} else {
+					return partitions[u] == 0 && partitions[v] == 1;
+				}
+			}};
+
+			auto vtx_matched = create_vertex_label_container(graph, false);
+			for(const auto& [u, v, i]: all_edges(graph)) {
+				if(matching[i]) {
+					vtx_matched[u] = true;
+					vtx_matched[v] = true;
+				}
+			}
+
+			for(const auto& vtx: all_vertices(graph)) {
+				if(partitions[vtx] == 0 && vtx_matched[vtx] == false) {
+					search.add_vertex(vtx);
+				}
+			}
+
+			while(auto v_opt = search.next_vertex()) {
+				auto v = *v_opt;
+				if(partitions[v] == 1 && vtx_matched[v] == false) { //augmenting path found - trace & return
+					std::vector<edge_id_t<GraphT>> result;
+					while(auto opt_edge = search.source_edge(v)) {
+						const auto& [v1, v2, idx] = *opt_edge;
+						v = v1;
+						result.push_back(idx);
+					}
+					return result_type{result};
+				}
+			}
+
+			return result_type{std::nullopt};
+		}
+
+		template<typename GraphT>
+		auto max_bipartite_matching(GraphT&& graph) {
+
+			auto partitions = bipartite_decompose(graph).value();
+			auto matching = create_edge_label_container(graph, char(false));
+
+			while(auto opt_aug_path = find_bipartite_augmenting_path(graph, partitions, matching)) {
+				for(const auto& idx: *opt_aug_path) {
+					const auto& [u, v, _] = edge_at(graph, idx);
+					matching[idx] = !matching[idx];
+				}
+			}
+
+			return matching;
+		}
+
+		template<typename GraphT>
+		auto max_weight_bipartite_matching(GraphT&& graph, auto&& weights) {
 
 		}
 
 		template<typename GraphT>
-		auto max_weight_bipartite_matching(GraphT&& graph, auto&& weights, std::output_iterator<edge_id_t<GraphT>> auto&& out_edges) {
-
-		}
-
-		template<typename GraphT>
-		auto cycle_cover(GraphT&& graph, std::output_iterator<edge_id_t<GraphT>> auto&& out_edges) {
+		auto cycle_cover(GraphT&& graph) {
 
 		}
 
