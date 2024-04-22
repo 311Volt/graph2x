@@ -17,9 +17,12 @@ int main() {
 	};
 
 	g2x::static_simple_graph graph(num_vertices, graph_data);
-	std::vector<int> distances(graph.num_vertices(), 0);
+	auto distances = g2x::create_vertex_label_container(graph, -1);
 
-	for(const auto& [u, v, i]: g2x::algo::breadth_first_search_edges(graph, 0)) {
+	for(const auto& [u, v, i]: g2x::algo::simple_edges_bfs(graph, 0)) {
+		printf("visiting edge [%d, %d]\n", u, v);
+		if(distances[u] == -1)
+			distances[u] = 0;
 		distances[v] = distances[u]+1;
 	}
 

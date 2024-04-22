@@ -102,7 +102,7 @@ namespace g2x {
 			next_fn_type fn_;
 		public:
 
-			explicit rust_like_range(const TNextFn& fn) : fn_(fn) {
+			explicit rust_like_range(TNextFn&& fn) : fn_(std::forward<TNextFn>(fn)) {
 
 			}
 
@@ -146,6 +146,8 @@ namespace g2x {
 
 	class static_simple_graph {
 	public:
+		using vertex_id_type = int;
+		using edge_id_type = int;
 		struct edge_type {
 			int u;
 			int v;
@@ -295,82 +297,276 @@ namespace g2x {
 		return graph.all_edges();
 	}
 
+	template<typename GraphT>
+	auto edge_at(GraphT&& graph, auto&& index) {
+		return graph.edge_at(index);
+	}
+
+	template<typename GraphT, typename T>
+	auto create_vertex_label_container(GraphT&& graph, T value = {}) {
+		return graph.template create_vertex_label_container<T>(value);
+	}
+
+	template<typename GraphT, typename T>
+	auto create_edge_label_container(GraphT&& graph, T value = {}) {
+		return graph.template create_edge_label_container<T>(value);
+	}
+
+	template<typename GraphT>
+	using vertex_id_t = typename GraphT::vertex_id_type;
+
+	template<typename GraphT>
+	using edge_id_t = typename GraphT::edge_id_type;
+
+	template<typename GraphT>
+	using edge_t = typename GraphT::edge_type;
+
+	enum class vertex_search_state {
+		unvisited,
+		marked,
+		visited
+	};
+
+
 	namespace algo {
 
-		template<typename GraphT, typename IdxOrRangeT>
-		auto breadth_first_search_edges(GraphT&& graph, IdxOrRangeT&& start = {}) {
+		template<typename GraphT>
+		class bfs_queue {
+		public:
+			using graph_type = GraphT;
+			using vertex_id_type = vertex_id_t<GraphT>;
+			using edge_id_type = edge_id_t<GraphT>;
 
-			using edge_type = typename std::remove_cvref_t<GraphT>::edge_type;
+			explicit bfs_queue(int num_vertices) {
+				storage.resize(num_vertices);
+			}
 
-			int graph_num_vtxs = num_vertices(graph);
-			std::vector<std::pair<int, std::optional<edge_type>>> initial_bfs_queue;
+			void push(const vertex_id_type& v) {
+				storage.at(head++) = v;
+			}
+
+			vertex_id_type pop() {
+				if(is_empty()) {
+					throw std::range_error("cannot pop from an empty queue");
+				}
+				auto r = storage.at(tail++);
+				return r;
+			}
+			[[nodiscard]] bool is_empty() const {
+				return head <= tail;
+			}
+		private:
+			std::vector<vertex_id_type> storage;
+			size_t head = 0;
+			size_t tail = 0;
+		};
+
+		template<typename GraphT>
+		class dfs_stack {
+
+		public:
+			using graph_type = GraphT;
+			using vertex_id_type = vertex_id_t<GraphT>;
+			using edge_id_type = edge_id_t<GraphT>;
+
+			explicit dfs_stack(int num_vertices) {
+				storage.reserve(num_vertices);
+			}
+
+			void push(const vertex_id_type& v) {
+				storage.push_back(v);
+			}
+			vertex_id_type pop() {
+				if(is_empty()) {
+					throw std::range_error("cannot pop from an empty queue");
+				}
+				auto r = storage.back();
+				storage.pop_back();
+				return r;
+			}
+			[[nodiscard]] bool is_empty() const {
+				return storage.empty();
+			}
+		private:
+			std::vector<vertex_id_type> storage;
+		};
+
+		template<typename GraphT, template<class> class SearcherTTP>
+		class generic_graph_search {
+		public:
+			using graph_type = GraphT;
+			using vertex_id_type = vertex_id_t<GraphT>;
+			using edge_id_type = edge_id_t<GraphT>;
+			using edge_type = edge_t<GraphT>;
+
+			explicit generic_graph_search(const GraphT& graph)
+				: graph(graph),
+					searcher(num_vertices(graph)),
+					edge_container(create_vertex_label_container(graph, edge_opt{})),
+					state_container(create_vertex_label_container(graph, vertex_search_state::unvisited))
+			{}
+
+			generic_graph_search(generic_graph_search&&) = default;
+			generic_graph_search& operator=(generic_graph_search&&) = default;
+
+
+			void add_vertex(const vertex_id_type& v) {
+				if(get_vertex_state(v) != vertex_search_state::unvisited) {
+					throw std::runtime_error("cannot add a marked/visited vertex for searching");
+				}
+				searcher.push(v);
+				state_container[v] = vertex_search_state::marked;
+			}
+
+			vertex_id_type next_vertex() {
+				auto vtx = searcher.pop();
+				state_container[vtx] = vertex_search_state::visited;
+				for(auto& edge: outgoing_edges(graph, vtx)) {
+					const auto& [u, v, i] = edge;
+					if(get_vertex_state(v) == vertex_search_state::unvisited) {
+						add_vertex(v);
+						edge_container[v] = edge;
+					}
+				}
+				return vtx;
+			}
+
+			[[nodiscard]] vertex_search_state get_vertex_state(const vertex_id_type& v) const {
+				return state_container[v];
+			}
+
+			std::optional<edge_type> next_edge() {
+				while(!is_finished()) {
+					auto v = next_vertex();
+					if(edge_container[v].has_value()) {
+						return *edge_container[v];
+					}
+				}
+				return std::nullopt;
+			}
+
+			std::optional<edge_type> source_edge(const vertex_id_type& v) {
+				return edge_container[v];
+			}
+
+			[[nodiscard]] bool is_finished() const {
+				return searcher.is_empty();
+			}
+
+		private:
+
+			using edge_opt = std::optional<edge_type>;
+			using edge_container_type = decltype(create_vertex_label_container<GraphT, edge_opt>(std::declval<GraphT>()));
+			using state_container_type = decltype(create_vertex_label_container<GraphT, vertex_search_state>(std::declval<GraphT>()));
+
+			const GraphT& graph;
+
+			SearcherTTP<GraphT> searcher;
+
+			edge_container_type edge_container;
+			state_container_type state_container;
+		};
+
+		template<typename GraphT>
+		struct breadth_first_search: public generic_graph_search<GraphT, bfs_queue> {
+			using generic_graph_search<GraphT, bfs_queue>::generic_graph_search;
+		};
+
+		template<typename GraphT>
+		struct depth_first_search: public generic_graph_search<GraphT, dfs_stack> {
+			using generic_graph_search<GraphT, dfs_stack>::generic_graph_search;
+		};
+
+		template<typename SearchT, typename IdxOrRangeT>
+		void generic_init_search(SearchT&& search, IdxOrRangeT&& start) {
 			if constexpr(std::ranges::forward_range<std::remove_cvref_t<IdxOrRangeT>>) {
 				for(auto& v: start) {
-					if(v < 0 || v >= graph_num_vtxs) {
-						throw std::runtime_error("invalid start vertex: " + std::to_string(v));
-					}
-					initial_bfs_queue.emplace_back(v, std::nullopt);
+					search.add_vertex(v);
 				}
 			} else {
-				initial_bfs_queue.emplace_back(start, std::nullopt);
+				search.add_vertex(start);
 			}
-			int start_size = initial_bfs_queue.size();
-			initial_bfs_queue.resize(graph_num_vtxs);
-
-			enum class vtx_color: char {
-				unvisited,
-				marked,
-				visited
-			};
+		}
 
 
-			return detail::rust_like_range(
-				[
-					&graph,
-					bfs_queue = std::vector{std::move(initial_bfs_queue)},
-					bfs_queue_head = start_size,
-					bfs_queue_tail = 0,
-					color = std::vector<vtx_color>(graph_num_vtxs, vtx_color::unvisited)
-				] mutable -> std::optional<typename std::remove_cvref_t<GraphT>::edge_type>
-				{
-				skip_source_vertex:
-					if(bfs_queue_tail < bfs_queue_head) {
-						auto [vtx, opt_edge] = bfs_queue.at(bfs_queue_tail++);
-						printf("visiting %d\n", vtx);
-						color[vtx] = vtx_color::visited;
+		template<typename GraphT, typename IdxOrRangeT>
+		auto simple_edges_bfs(const GraphT& graph, IdxOrRangeT&& start = {}) {
+			using graph_type = std::remove_cvref_t<GraphT>;
+			breadth_first_search<graph_type> bfs(graph);
+			generic_init_search(bfs, start);
+			return detail::rust_like_range([bfs = std::move(bfs)] mutable {
+				return bfs.next_edge();
+			});
+		}
 
-						for(const auto& edge: outgoing_edges(graph, vtx)) {
-							const auto& [u, v, i] = edge;
-							if(color[v] == vtx_color::unvisited) {
-								printf("adding %d [%d, %d, %d]\n", v, u, v, i);
-								bfs_queue.at(bfs_queue_head++) = {v, edge};
-								color[v] = vtx_color::marked;
-							}
-						}
-
-						if(opt_edge.has_value()) {
-							return *opt_edge;
-						} else {
-							goto skip_source_vertex;
-						}
-
-					} else {
-						return std::nullopt;
-					}
+		template<typename GraphT, typename IdxOrRangeT>
+		auto simple_vertices_bfs(const GraphT& graph, IdxOrRangeT&& start = {}) {
+			using graph_type = std::remove_cvref_t<GraphT>;
+			breadth_first_search<graph_type> bfs(graph);
+			generic_init_search(bfs, start);
+			return detail::rust_like_range([bfs = std::move(bfs)] mutable {
+				if(not bfs.is_finished()) {
+					return std::optional<vertex_id_t<graph_type>>(bfs.next_vertex());
+				} else {
+					return std::optional<vertex_id_t<graph_type>>();
 				}
-			);
+			});
 		}
 
-		auto breadth_first_search_vertices() {
-			throw std::runtime_error("unimplemented");
+		template<typename GraphT, typename IdxOrRangeT>
+		auto simple_edges_dfs(const GraphT& graph, IdxOrRangeT&& start = {}) {
+			using graph_type = std::remove_cvref_t<GraphT>;
+			depth_first_search<graph_type> dfs(graph);
+			generic_init_search(dfs, start);
+			return detail::rust_like_range([dfs = std::move(dfs)] mutable {
+				return dfs.next_edge();
+			});
 		}
 
-		auto depth_first_search_edges() {
-			throw std::runtime_error("unimplemented");
+		template<typename GraphT, typename IdxOrRangeT>
+		auto simple_vertices_dfs(const GraphT& graph, IdxOrRangeT&& start = {}) {
+			using graph_type = std::remove_cvref_t<GraphT>;
+			depth_first_search<graph_type> dfs(graph);
+			generic_init_search(dfs, start);
+			return detail::rust_like_range([dfs = std::move(dfs)] mutable {
+				if(not dfs.is_finished()) {
+					return std::optional<vertex_id_t<graph_type>>(dfs.next_vertex());
+				} else {
+					return std::optional<vertex_id_t<graph_type>>();
+				}
+			});
 		}
 
-		auto depth_first_search_vertices() {
-			throw std::runtime_error("unimplemented");
+
+		template<typename GraphT>
+		auto bipartite_decompose(GraphT&& graph) {
+
+			auto labels = create_vertex_label_container<GraphT, char>(-1);
+
+			using result_type = std::optional<decltype(labels)>;
+
+			for(const auto& vtx: all_vertices(graph)) {
+				for(const auto& [u, v, i]: breadth_first_search_edges(graph, vtx)) {
+
+				}
+			}
+
+			return result_type{labels};
+		}
+
+		template<typename GraphT>
+		auto max_bipartite_matching(GraphT&& graph, std::output_iterator<edge_id_t<GraphT>> auto&& out_edges) {
+
+		}
+
+		template<typename GraphT>
+		auto max_weight_bipartite_matching(GraphT&& graph, auto&& weights, std::output_iterator<edge_id_t<GraphT>> auto&& out_edges) {
+
+		}
+
+		template<typename GraphT>
+		auto cycle_cover(GraphT&& graph, std::output_iterator<edge_id_t<GraphT>> auto&& out_edges) {
+
 		}
 
 	}
