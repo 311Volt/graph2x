@@ -519,7 +519,7 @@ struct GraphGrid: public Entity {
 			if(optGrab) {
 				def.leftTop = optGrab->grabLeftTop + (mPos - optGrab->grabPos) / def.zoom;
 			}
-			//def.zoom = pow(1.2, ev.mouse.dz);
+			//def.zoom *= pow(1.2, ev.mouse.dz);
 		}
 
 		if(auto optVtxMsg = al::TryGetUserEventData<msg::AddVertex>(ev)) {
@@ -621,17 +621,38 @@ int main() {
 	glob::world = &world;
 
 	auto hBtn1 = world.createEntity<Button>(Button::Def{
-		.rect = al::RectI::XYWH(40, 40, 200, 35),
-		.caption = "This is a button",
-		.callback = []() {
-			//al::MessageBox("hello", "you pressed button #1");
+		.rect = al::RectI::XYWH(30, 30, 200, 25),
+		.caption = "Export graph to .txt",
+		.callback = [&]() {
+			
 		}
 	});
 	auto hBtn2 = world.createEntity<Button>(Button::Def{
-		.rect = al::RectI::XYWH(40, 90, 200, 35),
-		.caption = "This is another button",
-		.callback = []() {
-			//al::MessageBox("hello", "you pressed button #2");
+		.rect = al::RectI::XYWH(30, 70, 200, 25),
+		.caption = "BFS from 0",
+		.callback = [&]() {
+			
+		}
+	});
+	auto hBtn3 = world.createEntity<Button>(Button::Def{
+		.rect = al::RectI::XYWH(30, 110, 200, 25),
+		.caption = "DFS from 0",
+		.callback = [&]() {
+			
+		}
+	});
+	auto hBtn4 = world.createEntity<Button>(Button::Def{
+		.rect = al::RectI::XYWH(30, 150, 200, 25),
+		.caption = "Max bipartite matching",
+		.callback = [&]() {
+			
+		}
+	});
+	auto hBtn5 = world.createEntity<Button>(Button::Def{
+		.rect = al::RectI::XYWH(30, 190, 200, 25),
+		.caption = "Cycle cover",
+		.callback = [&]() {
+			
 		}
 	});
 
