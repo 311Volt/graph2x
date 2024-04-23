@@ -176,12 +176,14 @@ namespace g2x {
 		std::vector<edge_type> edge_storage;
 
 		//subspans of edge_storage where the i-th element spans all edges adjacent to vertex v_i
+		//TODO fix copying!!!!
 		std::vector<std::span<edge_type>> adjacency_partitions;
 
 		//i-th element is the index to edge_storage to one of the two edges that satisfy i==idx
 		std::vector<int> offset_of_edge;
 
 	public:
+
 
 		bool is_directed = false;
 

@@ -2,6 +2,7 @@
 #include <graph2x.hpp>
 #include <axxegro/axxegro.hpp>
 #include <list>
+#include <map>
 
 
 al::Vec3f ColorToVec(al::Color color) {
@@ -20,6 +21,20 @@ float PointToLineSegmentDist(al::Vec2f p, al::Vec2f a, al::Vec2f b)
 	al::Vec2f prj = a + (b - a)*t;
 	return (p - prj).length();
 }
+
+template<typename T>
+struct SmoothValue {
+	T value {};
+	T targetValue {};
+	double halfLife = 1.0 / 12.0;
+
+	void update(double deltaTime) {
+		double w = std::pow(2.0, -deltaTime / halfLife);
+		value = value*w + targetValue*(1.0-w);
+	}
+
+
+};
 
 namespace msg {
 
@@ -66,7 +81,7 @@ void DrawShadowedText(const std::string& text, al::Color color, al::Vec2i pos, i
 
 
 struct Entity {
-	virtual void tick(double time) = 0;
+	virtual void tick(double deltaTime) = 0;
 	virtual void render() = 0;
 	virtual bool onEvent(const al::Event&) = 0;
 	virtual int getZOrder() = 0;
@@ -124,9 +139,9 @@ public:
 		};
 	}
 
-	void tick(double time) {
+	void tick(double deltaTime) {
 		for(const auto& sp: entities) {
-			sp->tick(time);
+			sp->tick(deltaTime);
 		}
 	}
 
@@ -186,9 +201,9 @@ public:
 	};
 
 
-	void tick(double time) override {
+	void tick(double deltaTime) override {
 		static constexpr double half_life = 1.0 / 15.0;
-		double w = std::exp2(-time / half_life);
+		double w = std::exp2(-deltaTime / half_life);
 		currentColor = VecToColor(ColorToVec(currentColor)*w + ColorToVec(targetColor())*(1.0-w));
 	}
 
@@ -260,14 +275,21 @@ struct MessageLog: public Entity {
 };
 
 struct GraphGridDef {
-	al::Vec2f leftTop {};
-	float zoom = 64.0;
+	al::Vec2f center {};
+	SmoothValue<float> zoom {
+		.value = 64.0,
+		.targetValue = 64.0,
+		.halfLife = 1.0 / 15.0
+	};
 
 	bool editMode = false;
 	std::optional<void*> optNewEdgeSrc = {};
 
 	al::Transform getTransform() {
-		return al::Transform::Eye().translate(leftTop).scale({zoom, zoom});
+		return al::Transform::Eye()
+			.translate(center)
+			.scale({zoom.value, zoom.value})
+			.translate(al::CurrentDisplay.size().asFloat() / 2.0);
 	}
 
 	al::Vec2f scrToWorld(al::Vec2f scrPos) {
@@ -293,20 +315,26 @@ struct GraphNode: public Entity {
 		float radius {};
 	};
 
+	struct Effects {
+		std::optional<al::Color> overrideColor = {};
+		std::optional<std::string> additionalLabel = {};
+	} effects = {};
+
 	GraphNode() = default;
 
-	void tick(double time) override {
+	void tick(double deltaTime) override {
+
 	}
 
 	void render() override {
 
 		auto scrCenter = gridDef->worldToScr(this->center);
-		auto scrOT = std::max<float>(1.0, OutlineThickness * gridDef->zoom);
-		auto scrR = std::max<float>(1.0, Radius * gridDef->zoom);
+		auto scrOT = std::max<float>(1.0, OutlineThickness * gridDef->zoom.value);
+		auto scrR = std::max<float>(1.0, Radius * gridDef->zoom.value);
 
-		static constexpr auto defaultColor = al::White;
-		static constexpr auto hoverColor = al::RGB(190, 200, 255);
-		static constexpr auto editColor = al::RGB(255, 200, 190);
+		auto defaultColor = effects.overrideColor.value_or(al::White);
+		auto hoverColor = al::RGB(190, 200, 255);
+		auto editColor = al::RGB(255, 200, 190);
 		auto color = defaultColor;
 		if(hover) {
 			color = gridDef->editMode ? editColor : hoverColor;
@@ -314,7 +342,16 @@ struct GraphNode: public Entity {
 
 		al::DrawFilledCircle(scrCenter, scrR, color);
 		al::DrawCircle(scrCenter, scrR, al::Black, scrOT);
-		DrawShadowedText(std::to_string(label), al::Black, scrCenter.asInt());
+
+		DrawShadowedText(std::to_string(label), al::Black, scrCenter.asInt() - al::Vec2i{0, glob::DefaultFont.getDescent()});
+		if(effects.additionalLabel) {
+
+			DrawShadowedText(
+				effects.additionalLabel.value(),
+				al::Blue,
+				scrCenter.asInt() - al::Vec2i{0, glob::DefaultFont.getDescent() + glob::DefaultFont.getLineHeight()});
+
+		}
 	}
 
 	bool onEvent(const al::Event& ev) override {
@@ -325,7 +362,6 @@ struct GraphNode: public Entity {
 		}
 
 		if(ev.type == ALLEGRO_EVENT_MOUSE_BUTTON_DOWN) {
-			al::Vec2f mousePos(ev.mouse.x, ev.mouse.y);
 			if(hover) {
 				if(ev.mouse.button == al::LMB) {
 					if(gridDef->optNewEdgeSrc) {
@@ -360,29 +396,41 @@ struct GraphEdge: public Entity {
 
 	static constexpr float Thickness = 0.05;
 
+	struct Effects {
+		std::optional<al::Color> overrideColor = {};
+		std::optional<std::string> additionalLabel = {};
+	} effects = {};
+
 	GraphEdge() = default;
 
-	void tick(double time) override {
+	void tick(double deltaTime) override {
 		
 	}
 
+
 	void render() override {
-		auto center1 = u->center;
-		auto center2 = v->center;
-		auto thickness = std::max<float>(1.0, Thickness * gridDef->zoom);
+		auto center1 = gridDef->worldToScr(u->center);
+		auto center2 = gridDef->worldToScr(v->center);
+
+		auto thickness = std::max<float>(1.0, Thickness * gridDef->zoom.value);
 
 		if(hover) {
 			thickness *= 1.5;
 		}
 
-		static constexpr auto defaultColor = al::White;
-		static constexpr auto hoverColor = al::RGB(220, 255, 220);
-		static constexpr auto editColor = al::RGB(255, 120, 120);
+		auto defaultColor = effects.overrideColor.value_or(al::Black);
+		auto hoverColor = al::RGB(0, 170, 0);
+		auto editColor = al::RGB(170, 0, 0);
 		auto color = defaultColor;
 		if(hover) {
 			color = gridDef->editMode ? editColor : hoverColor;
 		}
-		al::DrawLine(gridDef->worldToScr(center1), gridDef->worldToScr(center2), al::Black, thickness);
+
+		al::DrawLine(center1, center2, color, thickness);
+		if(effects.additionalLabel) {
+			auto middle = (center1 + center2) / 2.0;
+			DrawShadowedText(effects.additionalLabel.value(), al::Green, middle.asInt(), ALLEGRO_ALIGN_CENTER);
+		}
 		
 		
 	}
@@ -392,8 +440,8 @@ struct GraphEdge: public Entity {
 		if(ev.type == ALLEGRO_EVENT_MOUSE_AXES) {
 			al::Vec2f mousePos(ev.mouse.x, ev.mouse.y);
 			auto worldDist = PointToLineSegmentDist(gridDef->scrToWorld(mousePos), u->center, v->center);
-			auto scrDist = worldDist * gridDef->zoom;
-			hover = (scrDist < std::max<float>(2.0, Thickness*gridDef->zoom));
+			auto scrDist = worldDist * gridDef->zoom.value;
+			hover = (scrDist < std::max<float>(2.0, Thickness*gridDef->zoom.value));
 		} else if(ev.type == ALLEGRO_EVENT_MOUSE_BUTTON_DOWN) {
 			if(hover) {
 				if(gridDef->editMode && ev.mouse.button == al::RMB) {
@@ -431,6 +479,8 @@ struct GraphGrid: public Entity {
 					edgesForRemovalSet.insert(e.get().label);
 				}
 			}
+			for(auto& v: verticesList) v.get().effects = {};
+			for(auto& e: edgesList) e.get().effects = {};
 
 			edgesList.remove_if([&](const World::EntityHandle<GraphEdge>& hEdge){
 				return edgesForRemovalSet.contains(hEdge.get().label);
@@ -452,10 +502,11 @@ struct GraphGrid: public Entity {
 		}
 	}
 
-	void tick(double time) override {
+	void tick(double deltaTime) override {
 
 		updateGraph();
 		def.editMode = (al::IsKeyDown(ALLEGRO_KEY_LCTRL) || al::IsKeyDown(ALLEGRO_KEY_RCTRL));
+		def.zoom.update(deltaTime);
 
 		if(def.editMode) {
 			al::CurrentDisplay.setSystemCursor(ALLEGRO_SYSTEM_MOUSE_CURSOR_PRECISION);
@@ -477,7 +528,7 @@ struct GraphGrid: public Entity {
 			float sx = def.worldToScr({x, 0.f}).x;
 			al::DrawLine({sx, 0.f}, {sx, sh}, al::RGB(224, 224, 224));
 		}
-		for(float y = floor(worldRect.a.x); y < ceil(worldRect.b.x); y += 1.0f) {
+		for(float y = floor(worldRect.a.y); y < ceil(worldRect.b.y); y += 1.0f) {
 			float sy = def.worldToScr({0.f, y}).y;
 			al::DrawLine({0.f, sy}, {sw, sy}, al::RGB(224, 224, 224));
 		}
@@ -505,7 +556,7 @@ struct GraphGrid: public Entity {
 					return true;
 				} else {
 					optGrab = GrabData {
-						.grabLeftTop = def.leftTop,
+						.grabLeftTop = def.center,
 						.grabPos = al::GetMousePos().asFloat()
 					};
 				}
@@ -517,9 +568,9 @@ struct GraphGrid: public Entity {
 		} else if(ev.type == ALLEGRO_EVENT_MOUSE_AXES) {
 			auto mPos = al::GetMousePos().asFloat();
 			if(optGrab) {
-				def.leftTop = optGrab->grabLeftTop + (mPos - optGrab->grabPos) / def.zoom;
+				def.center = optGrab->grabLeftTop + (mPos - optGrab->grabPos) / def.zoom.value;
 			}
-			//def.zoom *= pow(1.2, ev.mouse.dz);
+			def.zoom.targetValue *= pow(1.2, ev.mouse.dz);
 		}
 
 		if(auto optVtxMsg = al::TryGetUserEventData<msg::AddVertex>(ev)) {
@@ -569,16 +620,109 @@ struct GraphGrid: public Entity {
 	int getZOrder() override {
 		return -10;
 	}
+
+	struct LabeledGraph {
+		g2x::static_simple_graph graph;
+		std::vector<GraphNode*> nodeMap;
+		std::vector<GraphEdge*> edgeMap;
+	};
 	
-	g2x::static_simple_graph get_graph() {
+	LabeledGraph get_graph() {
 		updateGraph();
 		
 		int numVertices = verticesList.size();
-		std::vector<std::pair<int, int>> edges;
+		std::vector<std::pair<int, int>> ctorEdges;
+		std::map<int, GraphNode*> nodeMap;
+		std::map<std::pair<int,int>, GraphEdge*> edgeMap;
 		for(auto& hEdge: edgesList) {
-
+			int u = hEdge.get().u->label;
+			int v = hEdge.get().v->label;
+			ctorEdges.emplace_back(u, v);
+			edgeMap[{u, v}] = &hEdge.get();
+			printf("u,v %d,%d ---> %p\n",u,v,(void*)edgeMap[{u,v}]);
 		}
+		for(auto& hVtx: verticesList) {
+			int v = hVtx.get().label;
+			nodeMap[v] = &hVtx.get();
+		}
+		g2x::static_simple_graph graph {numVertices, ctorEdges};
+
+
+		auto nodes = g2x::create_vertex_label_container(graph, (GraphNode*)nullptr);
+		auto edges = g2x::create_edge_label_container(graph, (GraphEdge*)nullptr);
+
+		for(const auto& v: g2x::all_vertices(graph)) {
+			nodes[v] = nodeMap[v];
+		}
+		for(const auto& [u, v, i]: g2x::all_edges(graph)) {
+			edges[i] = edgeMap[{u, v}];
+			if(not edges[i]) {
+				edges[i] = edgeMap[{v, u}];
+			}
+			printf("u,v,i %d,%d,%d -> %p\n",u,v,i,(void*)edges[i]);
+		}
+
+		return LabeledGraph {std::move(graph), nodes, edges};
 	}
+
+	void bfsFromZero() {
+		const auto& [graph, nodeMap, edgeMap] = get_graph();
+		auto distances = g2x::create_vertex_label_container(graph, -1);
+
+		for(const auto& [u, v, i]: g2x::algo::simple_edges_bfs(graph, 0)) {
+			if(distances[u] == -1) {
+				distances[u] = 0;
+			}
+			distances[v] = distances[u] + 1;
+
+			edgeMap[i]->effects.overrideColor = al::LightMagenta;
+		}
+
+		for(const auto& v: g2x::all_vertices(graph)) {
+			nodeMap[v]->effects.additionalLabel = std::format("d={}", distances[v]);
+		}
+
+
+	}
+
+	void dfsFromZero() {
+		const auto& [graph, nodeMap, edgeMap] = get_graph();
+		auto sources = g2x::create_vertex_label_container(graph, -1);
+		for(const auto& [u, v, i]: g2x::algo::simple_edges_dfs(graph, 0)) {
+			sources[v] = u;
+		}
+
+		for(const auto& v: g2x::all_vertices(graph)) {
+			nodeMap[v]->effects.additionalLabel = std::format("src={}", sources[v]);
+		}
+
+	}
+
+	void maxBipartiteMatching() {
+		const auto& [graph, nodeMap, edgeMap] = get_graph();
+
+		try {
+			auto matching = g2x::algo::max_bipartite_matching(graph);
+
+			for(const auto& [u, v, i]: g2x::all_edges(graph)) {
+				if(matching[i]) {
+					edgeMap[i]->effects.overrideColor = al::LightRed;
+				}
+			}
+		} catch (std::exception&) {
+			printf("graph not bipartite - cannot match");
+		}
+
+
+	}
+
+	void cycleCover() {
+
+		al::MessageBox("Not implemented", "Not implemented");
+
+	}
+
+
 
 private:
 	bool graphUpToDate = false;
@@ -620,31 +764,33 @@ int main() {
 	World world;
 	glob::world = &world;
 
+	auto hGraphGrid = world.createEntity<GraphGrid>(GraphGridDef {});
+
 	auto hBtn1 = world.createEntity<Button>(Button::Def{
 		.rect = al::RectI::XYWH(30, 30, 200, 25),
 		.caption = "Export graph to .txt",
 		.callback = [&]() {
-			
 		}
 	});
 	auto hBtn2 = world.createEntity<Button>(Button::Def{
 		.rect = al::RectI::XYWH(30, 70, 200, 25),
 		.caption = "BFS from 0",
 		.callback = [&]() {
-			
+			hGraphGrid.get().bfsFromZero();
 		}
 	});
 	auto hBtn3 = world.createEntity<Button>(Button::Def{
 		.rect = al::RectI::XYWH(30, 110, 200, 25),
 		.caption = "DFS from 0",
 		.callback = [&]() {
-			
+			hGraphGrid.get().dfsFromZero();
 		}
 	});
 	auto hBtn4 = world.createEntity<Button>(Button::Def{
 		.rect = al::RectI::XYWH(30, 150, 200, 25),
 		.caption = "Max bipartite matching",
 		.callback = [&]() {
+			hGraphGrid.get().maxBipartiteMatching();
 			
 		}
 	});
@@ -652,23 +798,23 @@ int main() {
 		.rect = al::RectI::XYWH(30, 190, 200, 25),
 		.caption = "Cycle cover",
 		.callback = [&]() {
-			
+			hGraphGrid.get().cycleCover();
 		}
 	});
 
-	auto hGraphGrid = world.createEntity<GraphGrid>(GraphGridDef {});
 
 	loop.eventQueue.registerSource(glob::WorldEventSource);
 	loop.eventDispatcher.setCatchallHandler([&](const al::Event& ev) {
 		world.onEvent(ev);
 		return al::EventHandled;
 	});
-
+	loop.framerateLimiter.setLimit(al::FPSLimit::None);
 	loop.run([&] {
 		al::TargetBitmap.clearToColor(al::White);
 
 		world.tick(loop.getLastTickTime());
 		world.render();
+		DrawShadowedText(std::format("{} fps", loop.getFPS()), al::Black, {al::CurrentDisplay.width()-10, 10}, ALLEGRO_ALIGN_RIGHT);
 
 		al::CurrentDisplay.flip();
 	});
