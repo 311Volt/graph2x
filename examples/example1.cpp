@@ -2,15 +2,10 @@
 #include <graph2x.hpp>
 
 int main() {
-
 	g2x::static_simple_graph graph(6, std::vector<std::pair<int, int>>{
-		{0, 2},
-		{0, 4},
-		{0, 5},
-		{1, 4},
-		{1, 5},
-		{2, 3},
-		{2, 4},
+		{0, 2},		{0, 4},		{0, 5},
+		{1, 4},		{1, 5},
+		{2, 3},		{2, 4},
 		{4, 5}
 	});
 
@@ -25,7 +20,6 @@ int main() {
 	for(int i=0; i<distances.size(); i++) {
 		printf("v[%d] dist: %d\n", i, distances[i]);
 	}
-
 
 	// https://d3i71xaburhd42.cloudfront.net/8e1a91c72f61515a28b77e0bc443350bbbe00cb1/3-Figure3-1.png
 	g2x::static_simple_graph ex_bip_graph(11, std::vector<std::pair<int,int>>{

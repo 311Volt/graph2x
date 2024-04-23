@@ -518,7 +518,7 @@ struct GraphGrid: public Entity {
 	void render() override {
 		auto worldPos = def.scrToWorld(al::GetMousePos().asFloat());
 
-		DrawShadowedText(std::format("({:.3f}, {:.3f})", worldPos.x, worldPos.y), al::Black, {10, 10});
+		DrawText(std::format("({:.3f}, {:.3f})", worldPos.x, worldPos.y), al::Black, {10, 10});
 
 		float sw = al::CurrentDisplay.width();
 		float sh = al::CurrentDisplay.height();
@@ -667,6 +667,8 @@ struct GraphGrid: public Entity {
 
 	void bfsFromZero() {
 		const auto& [graph, nodeMap, edgeMap] = get_graph();
+		if(g2x::num_vertices(graph) == 0) return;
+
 		auto distances = g2x::create_vertex_label_container(graph, -1);
 
 		for(const auto& [u, v, i]: g2x::algo::simple_edges_bfs(graph, 0)) {
@@ -687,6 +689,8 @@ struct GraphGrid: public Entity {
 
 	void dfsFromZero() {
 		const auto& [graph, nodeMap, edgeMap] = get_graph();
+		if(g2x::num_vertices(graph) == 0) return;
+
 		auto sources = g2x::create_vertex_label_container(graph, -1);
 		for(const auto& [u, v, i]: g2x::algo::simple_edges_dfs(graph, 0)) {
 			sources[v] = u;
@@ -700,6 +704,7 @@ struct GraphGrid: public Entity {
 
 	void maxBipartiteMatching() {
 		const auto& [graph, nodeMap, edgeMap] = get_graph();
+		if(g2x::num_vertices(graph) == 0) return;
 
 		try {
 			auto matching = g2x::algo::max_bipartite_matching(graph);
@@ -710,7 +715,7 @@ struct GraphGrid: public Entity {
 				}
 			}
 		} catch (std::exception&) {
-			printf("graph not bipartite - cannot match");
+			al::MessageBox("Error", "", "Odd cycle detected - graph is not bipartite, aborting");
 		}
 
 
@@ -814,7 +819,12 @@ int main() {
 
 		world.tick(loop.getLastTickTime());
 		world.render();
-		DrawShadowedText(std::format("{} fps", loop.getFPS()), al::Black, {al::CurrentDisplay.width()-10, 10}, ALLEGRO_ALIGN_RIGHT);
+		DrawText(std::format("{} fps", loop.getFPS()), al::Black, {al::CurrentDisplay.width()-10, 10}, ALLEGRO_ALIGN_RIGHT);
+		DrawText("LMB - drag view", al::Black, {al::CurrentDisplay.width()-10, 30}, ALLEGRO_ALIGN_RIGHT);
+		DrawText("Mouse wheel - zoom in/out", al::Black, {al::CurrentDisplay.width()-10, 50}, ALLEGRO_ALIGN_RIGHT);
+		DrawText("Ctrl+LMB - insert node or edge", al::Black, {al::CurrentDisplay.width()-10, 70}, ALLEGRO_ALIGN_RIGHT);
+		DrawText("Ctrl+RMB - delete node or edge", al::Black, {al::CurrentDisplay.width()-10, 90}, ALLEGRO_ALIGN_RIGHT);
+
 
 		al::CurrentDisplay.flip();
 	});
