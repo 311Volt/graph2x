@@ -608,7 +608,7 @@ namespace g2x {
 			 * BFS distances. In particular, unmatched left vertices have a distance of 0.
 			 */
 			template<typename GraphT>
-			auto hopcroft_karp_bfs_stage(GraphT&& graph, auto&& partitions, auto&& matching) {
+			auto hopcroft_karp_bfs_stage(GraphT&& graph, auto&& partitions, auto&& matching, int* out_aug_path_length) {
 				auto edge_predicate = [&](auto&& edge) {
 					const auto& [u, v, i] = edge;
 					if(matching[i]) {
@@ -659,6 +659,9 @@ namespace g2x {
 						bfs_layer[v] = -1;
 					}
 				}
+				if(out_aug_path_length) {
+					*out_aug_path_length = aug_path_length;
+				}
 
 				return bfs_layer;
 			}
@@ -670,17 +673,20 @@ namespace g2x {
 				const auto& endpoint_candidates,
 				const auto& used_vertices,
 				auto&& start_vertex,
-				auto&& output_vertices)
+				std::optional<edge_id_t<GraphT>> source_edge,
+				auto&& output_edges)
 			{
-				*output_vertices++ = start_vertex;
-
 				if(endpoint_candidates[start_vertex]) {
+					*output_edges++ = *source_edge;
 					return true;
 				}
 
 				for(const auto& [u, v, i]: outgoing_edges(graph, start_vertex)) {
-					if(not used_vertices[v] && bfs_levels[u]+1 == bfs_levels[v]) {
-						if(hopcroft_karp_dfs_step(graph, bfs_levels, endpoint_candidates, used_vertices, v, output_vertices)) {
+					if(not used_vertices[v] && bfs_levels[v] - bfs_levels[u] == 1) {
+						if(hopcroft_karp_dfs_step(graph, bfs_levels, endpoint_candidates, used_vertices, v, i, output_edges)) {
+							if(source_edge) {
+								*output_edges++ = *source_edge;
+							}
 							return true;
 						}
 					}
@@ -691,7 +697,7 @@ namespace g2x {
 			}
 
 			template<typename GraphT>
-			auto hopcroft_karp_dfs_stage(
+			void hopcroft_karp_dfs_stage(
 				GraphT&& graph,
 				const auto& bfs_levels,
 				const auto& start_vertices,
@@ -701,17 +707,33 @@ namespace g2x {
 				std::vector<edge_id_t<GraphT>> augpath;
 				auto used_vertices = create_vertex_label_container(graph, char(false));
 
+				int dbg_num_aug_paths = 0;
+				std::optional<vertex_id_t<GraphT>> dbg_endpoint;
+				for(const auto& v: all_vertices(graph)) {
+					if(endpoint_candidates[v]) {
+						dbg_endpoint = v;
+					}
+				}
+
 				for(const auto& start_vtx: start_vertices) {
-					if(hopcroft_karp_dfs_step(graph, bfs_levels, endpoint_candidates, used_vertices, start_vtx, std::back_inserter(augpath))) {
-						for(const auto& [u, v, i]: augpath) {
+					if(used_vertices[start_vtx]) {
+						continue;
+					}
+
+					if(hopcroft_karp_dfs_step(graph, bfs_levels, endpoint_candidates, used_vertices, start_vtx, std::nullopt, std::back_inserter(augpath))) {
+						for(const auto& i: augpath) {
+							const auto& [u, v, _] = edge_at(graph, i);
 							used_vertices[u] = true;
 							used_vertices[v] = true;
 							*output_augmenting_set++ = i;
 						}
+						dbg_num_aug_paths++;
 					}
 
 					augpath.clear();
 				}
+
+				printf("debug: %d augmenting paths found (length %d)\n", dbg_num_aug_paths, bfs_levels[*dbg_endpoint]);
 			}
 
 		}
@@ -719,84 +741,25 @@ namespace g2x {
 		template<typename GraphT>
 		auto find_bipartite_augmenting_set(GraphT&& graph, auto&& partitions, auto&& matching) {
 
-			auto edge_predicate = [&](auto&& edge) {
-				const auto& [u, v, i] = edge;
-				if(matching[i]) {
-					return partitions[u] == 1 && partitions[v] == 0;
-				} else {
-					return partitions[u] == 0 && partitions[v] == 1;
-				}
-			};
+			int aug_path_length = -1;
+			auto bfs_levels = detail::hopcroft_karp_bfs_stage(graph, partitions, matching, &aug_path_length);
 
-			breadth_first_search bfs {graph, edge_predicate};
-
-
-			auto vtx_matched = create_vertex_label_container(graph, char(false));
-			auto is_endpoint_candidate = create_vertex_label_container(graph, char(false));
-
-			for(const auto& [u, v, i]: all_edges(graph)) {
-				if(matching[i]) {
-					vtx_matched[u] = true;
-					vtx_matched[v] = true;
-				}
-			}
+			std::vector<vertex_id_t<GraphT>> start_vertices;
+			auto endpoint_candidates = create_vertex_label_container(graph, char(false));
 
 			for(const auto& vtx: all_vertices(graph)) {
-				if(partitions[vtx] == 0 && vtx_matched[vtx] == false) {
-					bfs.add_vertex(vtx);
+				if(bfs_levels[vtx] == 0) {
+					start_vertices.push_back(vtx);
+				}
+				if(bfs_levels[vtx] == aug_path_length) {
+					endpoint_candidates[vtx] = true;
 				}
 			}
 
-			int aug_path_length = std::numeric_limits<int>::max();
+			std::vector<edge_id_t<GraphT>> augmenting_set;
+			detail::hopcroft_karp_dfs_stage(graph, bfs_levels, start_vertices, endpoint_candidates, std::back_inserter(augmenting_set));
 
-			auto bfs_layer = create_vertex_label_container(graph, -1);
-			while(auto v_opt = bfs.next_vertex()) {
-				auto v = *v_opt;
-				bfs.update_distances(v, bfs_layer);
-
-				if(bfs_layer[v] > aug_path_length) { //search is past all shortest augmenting paths and should terminate
-					break;
-				}
-
-				if(partitions[v] == 1 && vtx_matched[v] == false) { //augmenting path endpoint candidate found
-					is_endpoint_candidate[v] = true;
-					aug_path_length = std::min(aug_path_length, bfs_layer[v]);
-				}
-			}
-
-			auto result = std::vector<edge_id_t<GraphT>>{};
-
-			auto vtx_used = create_vertex_label_container(graph, char(false));
-			auto edge_predicate_dfs = [&](auto&& edge) {
-				const auto& [u, v, i] = edge;
-				return edge_predicate(edge) && !vtx_used && (bfs_layer[u]+1 == bfs_layer[v]);
-			};
-			depth_first_search dfs {graph, edge_predicate_dfs};
-			for(const auto& vtx: all_vertices(graph)) {
-				if(partitions[vtx] == 0 && vtx_matched[vtx] == false) {
-					dfs.add_vertex(vtx);
-				}
-			}
-
-			int dbg_num_augmenting_paths = 0;
-
-			while(auto v_opt = dfs.next_vertex()) {
-				const auto& v = *v_opt;
-				if(is_endpoint_candidate[v]) { //augmenting path found - trace to source
-					++dbg_num_augmenting_paths;
-					auto cv = v;
-					while(auto opt_edge = dfs.source_edge(cv)) {
-						const auto& [u1, v1, i] = *opt_edge;
-						cv = u1;
-						result.push_back(i);
-					}
-				}
-			}
-			if(dbg_num_augmenting_paths) {
-				printf("%d augmenting paths of length %d found\n", dbg_num_augmenting_paths, aug_path_length);
-			}
-
-			return result;
+			return augmenting_set;
 
 		}
 
