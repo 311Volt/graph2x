@@ -607,7 +607,6 @@ namespace g2x {
 			/* Runs the BFS stage of the Hopcroft-Karp algorithm and returns a vertex-label-container of
 			 * BFS distances. In particular, unmatched left vertices have a distance of 0.
 			 */
-
 			template<typename GraphT>
 			auto hopcroft_karp_bfs_stage(GraphT&& graph, auto&& partitions, auto&& matching) {
 				auto edge_predicate = [&](auto&& edge) {
@@ -667,7 +666,7 @@ namespace g2x {
 			template<typename GraphT>
 			bool hopcroft_karp_dfs_step(
 				GraphT&& graph,
-				const auto& matching,
+				const auto& bfs_levels,
 				const auto& endpoint_candidates,
 				const auto& used_vertices,
 				auto&& start_vertex,
@@ -680,8 +679,8 @@ namespace g2x {
 				}
 
 				for(const auto& [u, v, i]: outgoing_edges(graph, start_vertex)) {
-					if(not used_vertices[v]) {
-						if(hopcroft_karp_dfs_step(graph, matching, endpoint_candidates, used_vertices, v, output_vertices)) {
+					if(not used_vertices[v] && bfs_levels[u]+1 == bfs_levels[v]) {
+						if(hopcroft_karp_dfs_step(graph, bfs_levels, endpoint_candidates, used_vertices, v, output_vertices)) {
 							return true;
 						}
 					}
@@ -694,15 +693,24 @@ namespace g2x {
 			template<typename GraphT>
 			auto hopcroft_karp_dfs_stage(
 				GraphT&& graph,
-				const auto& matching,
+				const auto& bfs_levels,
 				const auto& start_vertices,
-				const auto& endpoint_candidates)
+				const auto& endpoint_candidates,
+				auto&& output_augmenting_set)
 			{
 				std::vector<edge_id_t<GraphT>> augpath;
 				auto used_vertices = create_vertex_label_container(graph, char(false));
 
 				for(const auto& start_vtx: start_vertices) {
+					if(hopcroft_karp_dfs_step(graph, bfs_levels, endpoint_candidates, used_vertices, start_vtx, std::back_inserter(augpath))) {
+						for(const auto& [u, v, i]: augpath) {
+							used_vertices[u] = true;
+							used_vertices[v] = true;
+							*output_augmenting_set++ = i;
+						}
+					}
 
+					augpath.clear();
 				}
 			}
 
