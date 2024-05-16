@@ -11,6 +11,8 @@ option(GRAPH2X_BUILD_GRAPHICAL_EXAMPLES "Build example programs with graphics th
 add_executable(example1 "examples/example1.cpp")
 target_link_libraries(example1 PRIVATE graph2x)
 
+add_executable(benchmark "examples/benchmark.cpp")
+target_link_libraries(benchmark PRIVATE graph2x)
 
 if(GRAPH2X_BUILD_GRAPHICAL_EXAMPLES)
 	add_subdirectory("axxegro")

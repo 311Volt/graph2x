@@ -356,12 +356,16 @@ namespace g2x {
 			using vertex_id_type = vertex_id_t<GraphT>;
 			using edge_id_type = edge_id_t<GraphT>;
 
-			explicit bfs_queue(int num_vertices) {
-				storage.resize(num_vertices);
+			explicit bfs_queue(int num_vertices): num_vertices(num_vertices) {
+
+			}
+
+			void expect_full_search() {
+				storage.reserve(num_vertices);
 			}
 
 			void push(const vertex_id_type& v) {
-				storage.at(head++) = v;
+				storage.push_back(v);
 			}
 
 			vertex_id_type pop() {
@@ -371,12 +375,13 @@ namespace g2x {
 				auto r = storage.at(tail++);
 				return r;
 			}
+
 			[[nodiscard]] bool is_empty() const {
-				return head <= tail;
+				return storage.size() <= tail;
 			}
 		private:
 			std::vector<vertex_id_type> storage;
-			size_t head = 0;
+			int num_vertices;
 			size_t tail = 0;
 		};
 
@@ -389,6 +394,10 @@ namespace g2x {
 			using edge_id_type = edge_id_t<GraphT>;
 
 			explicit dfs_stack(int num_vertices) {
+
+			}
+
+			void expect_full_search() {
 				storage.reserve(num_vertices);
 			}
 
@@ -407,6 +416,7 @@ namespace g2x {
 				return storage.empty();
 			}
 		private:
+			int num_vertices;
 			std::vector<vertex_id_type> storage;
 		};
 
@@ -467,6 +477,16 @@ namespace g2x {
 				return std::nullopt;
 			}
 
+			template<typename ContainerT>
+			void update_distances(const vertex_id_type& vtx, ContainerT&& vtx_label_container) {
+				if(auto opt_edge = source_edge(vtx)) {
+					const auto& [u, v, i] = *opt_edge;
+					vtx_label_container[v] = vtx_label_container[u] + 1;
+				} else {
+					vtx_label_container[vtx] = 0;
+				}
+			}
+
 			std::optional<edge_type> source_edge(const vertex_id_type& v) {
 				return edge_container[v];
 			}
@@ -493,24 +513,11 @@ namespace g2x {
 		};
 
 		template<typename GraphT, typename EdgePredicateRefT = const detail::always_true&>
-		struct breadth_first_search: public generic_graph_search<GraphT, bfs_queue, EdgePredicateRefT> {
-			using generic_graph_search<GraphT, bfs_queue, EdgePredicateRefT>::generic_graph_search;
-
-			using edge_predicate_type = std::remove_cvref_t<EdgePredicateRefT>;
-			explicit breadth_first_search(const GraphT& graph, EdgePredicateRefT&& edge_predicate = edge_predicate_type{})
-				: generic_graph_search<GraphT, bfs_queue, EdgePredicateRefT>(graph, std::forward<EdgePredicateRefT>(edge_predicate))
-			{}
-		};
+		using breadth_first_search = generic_graph_search<GraphT, bfs_queue, EdgePredicateRefT>;
 
 		template<typename GraphT, typename EdgePredicateRefT = const detail::always_true&>
-		struct depth_first_search: public generic_graph_search<GraphT, dfs_stack, EdgePredicateRefT> {
-			using generic_graph_search<GraphT, dfs_stack, EdgePredicateRefT>::generic_graph_search;
+		using depth_first_search = generic_graph_search<GraphT, dfs_stack, EdgePredicateRefT>;
 
-			using edge_predicate_type = std::remove_cvref_t<EdgePredicateRefT>;
-			explicit depth_first_search(const GraphT& graph, EdgePredicateRefT&& edge_predicate = edge_predicate_type{})
-				: generic_graph_search<GraphT, dfs_stack, EdgePredicateRefT>(graph, std::forward<EdgePredicateRefT>(edge_predicate))
-			{}
-		};
 
 		template<typename SearchT, typename IdxOrRangeT>
 		void generic_init_search(SearchT&& search, IdxOrRangeT&& start) {
@@ -593,20 +600,132 @@ namespace g2x {
 			return result_type{labels};
 		}
 
-		template<typename GraphT>
-		auto find_bipartite_augmenting_path(GraphT&& graph, auto&& partitions, auto&& matching) {
-			using result_type = std::optional<std::vector<edge_id_t<GraphT>>>;
 
-			breadth_first_search search {graph, [&](auto&& edge) {
+		namespace detail {
+
+
+			/* Runs the BFS stage of the Hopcroft-Karp algorithm and returns a vertex-label-container of
+			 * BFS distances. In particular, unmatched left vertices have a distance of 0.
+			 */
+
+			template<typename GraphT>
+			auto hopcroft_karp_bfs_stage(GraphT&& graph, auto&& partitions, auto&& matching) {
+				auto edge_predicate = [&](auto&& edge) {
+					const auto& [u, v, i] = edge;
+					if(matching[i]) {
+						return partitions[u] == 1 && partitions[v] == 0;
+					} else {
+						return partitions[u] == 0 && partitions[v] == 1;
+					}
+				};
+
+				breadth_first_search bfs {graph, edge_predicate};
+
+
+				auto vtx_matched = create_vertex_label_container(graph, char(false));
+				auto is_endpoint_candidate = create_vertex_label_container(graph, char(false));
+
+				for(const auto& [u, v, i]: all_edges(graph)) {
+					if(matching[i]) {
+						vtx_matched[u] = true;
+						vtx_matched[v] = true;
+					}
+				}
+
+				for(const auto& vtx: all_vertices(graph)) {
+					if(partitions[vtx] == 0 && vtx_matched[vtx] == false) {
+						bfs.add_vertex(vtx);
+					}
+				}
+
+				int aug_path_length = std::numeric_limits<int>::max();
+
+				auto bfs_layer = create_vertex_label_container(graph, -1);
+				while(auto v_opt = bfs.next_vertex()) {
+					auto v = *v_opt;
+					bfs.update_distances(v, bfs_layer);
+
+					if(bfs_layer[v] > aug_path_length) { //search is past all shortest augmenting paths and should terminate
+						break;
+					}
+
+					if(partitions[v] == 1 && vtx_matched[v] == false) { //augmenting path endpoint candidate found
+						is_endpoint_candidate[v] = true;
+						aug_path_length = std::min(aug_path_length, bfs_layer[v]);
+					}
+				}
+
+				for(const auto& v: all_vertices(graph)) {
+					if(bfs_layer[v] == aug_path_length && not is_endpoint_candidate[v]) {
+						bfs_layer[v] = -1;
+					}
+				}
+
+				return bfs_layer;
+			}
+
+			template<typename GraphT>
+			bool hopcroft_karp_dfs_step(
+				GraphT&& graph,
+				const auto& matching,
+				const auto& endpoint_candidates,
+				const auto& used_vertices,
+				auto&& start_vertex,
+				auto&& output_vertices)
+			{
+				*output_vertices++ = start_vertex;
+
+				if(endpoint_candidates[start_vertex]) {
+					return true;
+				}
+
+				for(const auto& [u, v, i]: outgoing_edges(graph, start_vertex)) {
+					if(not used_vertices[v]) {
+						if(hopcroft_karp_dfs_step(graph, matching, endpoint_candidates, used_vertices, v, output_vertices)) {
+							return true;
+						}
+					}
+				}
+
+				return false;
+
+			}
+
+			template<typename GraphT>
+			auto hopcroft_karp_dfs_stage(
+				GraphT&& graph,
+				const auto& matching,
+				const auto& start_vertices,
+				const auto& endpoint_candidates)
+			{
+				std::vector<edge_id_t<GraphT>> augpath;
+				auto used_vertices = create_vertex_label_container(graph, char(false));
+
+				for(const auto& start_vtx: start_vertices) {
+
+				}
+			}
+
+		}
+
+		template<typename GraphT>
+		auto find_bipartite_augmenting_set(GraphT&& graph, auto&& partitions, auto&& matching) {
+
+			auto edge_predicate = [&](auto&& edge) {
 				const auto& [u, v, i] = edge;
 				if(matching[i]) {
 					return partitions[u] == 1 && partitions[v] == 0;
 				} else {
 					return partitions[u] == 0 && partitions[v] == 1;
 				}
-			}};
+			};
 
-			auto vtx_matched = create_vertex_label_container(graph, false);
+			breadth_first_search bfs {graph, edge_predicate};
+
+
+			auto vtx_matched = create_vertex_label_container(graph, char(false));
+			auto is_endpoint_candidate = create_vertex_label_container(graph, char(false));
+
 			for(const auto& [u, v, i]: all_edges(graph)) {
 				if(matching[i]) {
 					vtx_matched[u] = true;
@@ -616,24 +735,61 @@ namespace g2x {
 
 			for(const auto& vtx: all_vertices(graph)) {
 				if(partitions[vtx] == 0 && vtx_matched[vtx] == false) {
-					search.add_vertex(vtx);
+					bfs.add_vertex(vtx);
 				}
 			}
 
-			while(auto v_opt = search.next_vertex()) {
+			int aug_path_length = std::numeric_limits<int>::max();
+
+			auto bfs_layer = create_vertex_label_container(graph, -1);
+			while(auto v_opt = bfs.next_vertex()) {
 				auto v = *v_opt;
-				if(partitions[v] == 1 && vtx_matched[v] == false) { //augmenting path found - trace & return
-					std::vector<edge_id_t<GraphT>> result;
-					while(auto opt_edge = search.source_edge(v)) {
-						const auto& [v1, v2, idx] = *opt_edge;
-						v = v1;
-						result.push_back(idx);
-					}
-					return result_type{result};
+				bfs.update_distances(v, bfs_layer);
+
+				if(bfs_layer[v] > aug_path_length) { //search is past all shortest augmenting paths and should terminate
+					break;
+				}
+
+				if(partitions[v] == 1 && vtx_matched[v] == false) { //augmenting path endpoint candidate found
+					is_endpoint_candidate[v] = true;
+					aug_path_length = std::min(aug_path_length, bfs_layer[v]);
 				}
 			}
 
-			return result_type{std::nullopt};
+			auto result = std::vector<edge_id_t<GraphT>>{};
+
+			auto vtx_used = create_vertex_label_container(graph, char(false));
+			auto edge_predicate_dfs = [&](auto&& edge) {
+				const auto& [u, v, i] = edge;
+				return edge_predicate(edge) && !vtx_used && (bfs_layer[u]+1 == bfs_layer[v]);
+			};
+			depth_first_search dfs {graph, edge_predicate_dfs};
+			for(const auto& vtx: all_vertices(graph)) {
+				if(partitions[vtx] == 0 && vtx_matched[vtx] == false) {
+					dfs.add_vertex(vtx);
+				}
+			}
+
+			int dbg_num_augmenting_paths = 0;
+
+			while(auto v_opt = dfs.next_vertex()) {
+				const auto& v = *v_opt;
+				if(is_endpoint_candidate[v]) { //augmenting path found - trace to source
+					++dbg_num_augmenting_paths;
+					auto cv = v;
+					while(auto opt_edge = dfs.source_edge(cv)) {
+						const auto& [u1, v1, i] = *opt_edge;
+						cv = u1;
+						result.push_back(i);
+					}
+				}
+			}
+			if(dbg_num_augmenting_paths) {
+				printf("%d augmenting paths of length %d found\n", dbg_num_augmenting_paths, aug_path_length);
+			}
+
+			return result;
+
 		}
 
 		template<typename GraphT>
@@ -642,9 +798,12 @@ namespace g2x {
 			auto partitions = bipartite_decompose(graph).value();
 			auto matching = create_edge_label_container(graph, char(false));
 
-			while(auto opt_aug_path = find_bipartite_augmenting_path(graph, partitions, matching)) {
-				for(const auto& idx: *opt_aug_path) {
-					const auto& [u, v, _] = edge_at(graph, idx);
+			while(true) {
+				auto aug_set = find_bipartite_augmenting_set(graph, partitions, matching);
+				if(aug_set.empty()) {
+					break;
+				}
+				for(const auto& idx: aug_set) {
 					matching[idx] = !matching[idx];
 				}
 			}
