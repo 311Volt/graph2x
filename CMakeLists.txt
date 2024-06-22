@@ -1,9 +1,11 @@
 cmake_minimum_required(VERSION 3.26)
 project(graph2x)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 
-add_library(graph2x INTERFACE include/graph2x.hpp)
+file(GLOB_RECURSE GRAPH2X_HEADERS "include/*.hpp")
+
+add_library(graph2x INTERFACE ${GRAPH2X_HEADERS})
 target_include_directories(graph2x INTERFACE include)
 
 option(GRAPH2X_BUILD_GRAPHICAL_EXAMPLES "Build example programs with graphics that are dependent on axxegro" ON)

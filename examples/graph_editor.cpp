@@ -3,6 +3,7 @@
 #include <axxegro/axxegro.hpp>
 #include <list>
 #include <map>
+#include <deque>
 
 
 al::Vec3f ColorToVec(al::Color color) {
