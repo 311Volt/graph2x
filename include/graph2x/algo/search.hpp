@@ -112,7 +112,7 @@ namespace g2x {
 					throw std::runtime_error("cannot add a marked/visited vertex for searching");
 				}
 				searcher.push(v);
-				state_container[v] = vertex_search_state::marked;
+				state_container.at(v) = vertex_search_state::marked;
 			}
 			
 			std::optional<vertex_id_type> next_vertex() {
@@ -125,7 +125,7 @@ namespace g2x {
 					const auto& [u, v, i] = edge;
 					if(edge_predicate(edge) && get_vertex_state(v) == vertex_search_state::unvisited) {
 						add_vertex(v);
-						edge_container[v] = edge;
+						edge_container.at(v) = edge;
 					}
 				}
 				return vtx;
@@ -160,6 +160,15 @@ namespace g2x {
 			
 			[[nodiscard]] bool is_finished() const {
 				return searcher.is_empty();
+			}
+
+			void trace_path(const vertex_id_type& vtx, auto&& out_edge_ids) {
+				auto cur_vtx = vtx;
+				while(auto src_edge_opt = source_edge(cur_vtx)) {
+					const auto& [u, v, i] = *src_edge_opt;
+					cur_vtx = u;
+					*out_edge_ids++ = i;
+				}
 			}
 		
 		private:

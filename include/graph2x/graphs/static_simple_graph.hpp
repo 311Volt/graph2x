@@ -23,6 +23,7 @@ namespace g2x {
 	 * Pass over all_edges: O(E)
 	 * Edge index lookup: O(1)
 	 */
+
 	class static_simple_graph {
 	public:
 		using vertex_id_type = int;
@@ -95,7 +96,7 @@ namespace g2x {
 					adjacency_regions[v] = adjacency_regions[v-1];
 				}
 				auto& i = adjacency_regions[v];
-				while(source_vtx_storage[i] < v) {
+				while(i < source_vtx_storage.size() && source_vtx_storage[i] < v) {
 					i++;
 				}
 			}
