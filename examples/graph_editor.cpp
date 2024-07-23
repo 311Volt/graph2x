@@ -62,10 +62,17 @@ namespace msg {
 }
 
 class World;
+
+
 namespace glob {
 	al::Font DefaultFont = al::Font::CreateBuiltinFont();
 	al::UserEventSource WorldEventSource {};
 	World* world = nullptr;
+
+	inline struct {
+		bool displayGraphGrid = false;
+		bool displayNodeLabels = false;
+	} cfg;
 }
 
 void DrawText(const std::string& text, al::Color color, al::Vec2i pos, int align = ALLEGRO_ALIGN_LEFT) {
@@ -219,7 +226,9 @@ public:
 		al::DrawLine(def.rect.bottomLeft().asFloat(), def.rect.bottomRight().asFloat(), state!=State::Down ? ccDarkened : ccBrightened, 4.0);
 		al::DrawLine(def.rect.bottomRight().asFloat(), def.rect.topRight().asFloat(), state!=State::Down ? ccDarkened : ccBrightened, 4.0);
 
-		DrawShadowedText(def.caption, al::White, def.rect.center(), ALLEGRO_ALIGN_CENTER);
+		al::Vec2i fontOffset(0, -glob::DefaultFont.getLineHeight() / 2);
+
+		DrawShadowedText(def.caption, al::White, def.rect.center() + fontOffset, ALLEGRO_ALIGN_CENTER);
 
 		al::TargetBitmap.resetClippingRectangle();
 	}
@@ -344,14 +353,17 @@ struct GraphNode: public Entity {
 		al::DrawFilledCircle(scrCenter, scrR, color);
 		al::DrawCircle(scrCenter, scrR, al::Black, scrOT);
 
-		DrawShadowedText(std::to_string(label), al::Black, scrCenter.asInt() - al::Vec2i{0, glob::DefaultFont.getDescent()});
-		if(effects.additionalLabel) {
+		al::Vec2i fontOffset(0, -glob::DefaultFont.getLineHeight() / 2);
 
+		DrawShadowedText(std::to_string(label), al::Black, scrCenter.asInt() + fontOffset, ALLEGRO_ALIGN_CENTER);
+
+		if(effects.additionalLabel) {
 			DrawShadowedText(
 				effects.additionalLabel.value(),
 				al::Blue,
-				scrCenter.asInt() - al::Vec2i{0, glob::DefaultFont.getDescent() + glob::DefaultFont.getLineHeight()});
-
+				scrCenter.asInt() - fontOffset,
+				ALLEGRO_ALIGN_CENTER
+			);
 		}
 	}
 
@@ -520,6 +532,10 @@ struct GraphGrid: public Entity {
 		auto worldPos = def.scrToWorld(al::GetMousePos().asFloat());
 
 		DrawText(std::format("({:.3f}, {:.3f})", worldPos.x, worldPos.y), al::Black, {10, 10});
+
+		if(not glob::cfg.displayGraphGrid) {
+			return;
+		}
 
 		float sw = al::CurrentDisplay.width();
 		float sh = al::CurrentDisplay.height();
@@ -769,6 +785,11 @@ int main() {
 	al::EventLoop loop(al::DemoEventLoopConfig);
 	World world;
 	glob::world = &world;
+	try {
+		glob::DefaultFont = al::Font("resources/roboto.ttf", 16);
+	} catch (al::ResourceLoadError& ex) {
+		glob::DefaultFont = al::Font::CreateBuiltinFont();
+	}
 
 	auto hGraphGrid = world.createEntity<GraphGrid>(GraphGridDef {});
 

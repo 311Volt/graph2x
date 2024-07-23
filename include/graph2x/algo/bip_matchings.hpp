@@ -6,6 +6,10 @@
 #include <ostream>
 #include <print>
 #include <set>
+#include <algorithm>
+
+#include <math.h>
+#include <random>
 
 #include "search.hpp"
 #include "../core.hpp"
@@ -108,7 +112,16 @@ namespace g2x {
 		}
 
 
-		
+
+		namespace insights {
+			inline thread_local struct {
+				int longest_augmenting_path = 0;
+				int num_iterations = 0;
+				int first_stage_match_size = 0;
+				std::vector<int> augpath_lengths;
+			} hopcroft_karp;
+		}
+
 		
 		namespace detail {
 
@@ -175,6 +188,30 @@ namespace g2x {
 				
 				return bfs_layer;
 			}
+
+			template<typename GraphT>
+			double rate_edge(GraphT&& graph, const edge_t<GraphT>& edge) {
+				static constexpr std::array<double, 100> lookup_table = {
+					0.000,	0.000,	0.000,	0.000,	0.000,	0.000,	0.000,	0.000,	0.000,	0.000,
+					0.000,	0.000,	0.193,	0.308,	0.402,	0.503,	0.586,	0.649,	0.744,	0.784,
+					0.000,	0.191,	0.440,	0.497,	0.519,	0.529,	0.501,	0.495,	0.503,	0.483,
+					0.000,	0.306,	0.502,	0.502,	0.458,	0.410,	0.370,	0.329,	0.318,	0.280,
+					0.000,	0.400,	0.522,	0.458,	0.384,	0.328,	0.273,	0.248,	0.225,	0.194,
+					0.000,	0.495,	0.514,	0.416,	0.327,	0.271,	0.219,	0.193,	0.167,	0.148,
+					0.000,	0.592,	0.505,	0.364,	0.278,	0.222,	0.180,	0.152,	0.142,	0.112,
+					0.000,	0.674,	0.500,	0.357,	0.257,	0.187,	0.159,	0.132,	0.116,	0.096,
+					0.000,	0.743,	0.486,	0.312,	0.228,	0.167,	0.144,	0.125,	0.104,	0.085,
+					0.000,	0.864,	0.486,	0.302,	0.191,	0.148,	0.112,	0.096,	0.079,	0.061
+				};
+				const auto& [u, v, _] = edge;
+
+
+				int degU = std::clamp<int>(std::ranges::size(outgoing_edges(graph, u)), 0, 9);
+				int degV = std::clamp<int>(std::ranges::size(outgoing_edges(graph, v)), 0, 9);
+
+				int idx = degU*10 + degV;
+				return lookup_table[idx];
+			}
 			
 			template<typename GraphT>
 			bool hopcroft_karp_dfs_step(
@@ -197,7 +234,15 @@ namespace g2x {
 					return true;
 				}
 
-				for(const auto& [u, v, i]: outgoing_edges(graph, start_vertex)) {
+				std::vector<edge_t<GraphT>> out_edges = outgoing_edges(graph, start_vertex) | std::ranges::to<std::vector>();
+				// std::ranges::sort(out_edges, [&](const auto& ea, const auto& eb) {
+				// 	return rate_edge(graph, ea) < rate_edge(graph, eb);
+				// });
+				static std::mt19937_64 rand_gen{std::random_device{}()};
+				std::ranges::shuffle(out_edges, rand_gen);
+
+
+				for(const auto& [u, v, i]: out_edges/*outgoing_edges(graph, start_vertex)*/) {
 					if(not used_vertices[v] && bfs_levels[v] - bfs_levels[u] == 1 && matching[i] != source_matched) {
 						const auto& [u1, v1, i1] = edge_at(graph, i);
 						if(hopcroft_karp_dfs_step(graph, matching, bfs_levels, endpoint_candidates, used_vertices, v, i, output_edges)) {
@@ -225,6 +270,13 @@ namespace g2x {
 			{
 				std::vector<edge_id_t<GraphT>> augpath;
 				auto used_vertices = create_vertex_label_container<char>(graph, 0);
+
+				auto vertex_ratings = create_vertex_label_container<double>(graph, 9999.0);
+				for(const auto& e: all_edges(graph)) {
+					const auto& [u, v, i] = e;
+					vertex_ratings[u] = std::min(vertex_ratings[u], rate_edge(graph, e));
+					vertex_ratings[v] = std::min(vertex_ratings[v], rate_edge(graph, e));
+				}
 				
 				int dbg_num_aug_paths = 0;
 				std::optional<vertex_id_t<GraphT>> dbg_endpoint;
@@ -233,8 +285,15 @@ namespace g2x {
 						dbg_endpoint = v;
 					}
 				}
+
+				auto start_vertices_sorted = start_vertices | std::ranges::to<std::vector>();
+				// std::ranges::sort(start_vertices_sorted, [&](const auto& v1, const auto& v2) {
+				// 	return vertex_ratings[v1] < vertex_ratings[v2];
+				// });
+				static std::mt19937_64 rand_gen{std::random_device{}()};
+				std::ranges::shuffle(start_vertices_sorted, rand_gen);
 				
-				for(const auto& start_vtx: start_vertices) {
+				for(const auto& start_vtx: start_vertices_sorted /*start_vertices*/) {
 					if(used_vertices[start_vtx]) {
 						continue;
 					}
@@ -267,6 +326,11 @@ namespace g2x {
 			
 			int aug_path_length = -1;
 			auto bfs_levels = detail::hopcroft_karp_bfs_stage(graph, partitions, matching, &aug_path_length);
+
+			{
+				auto& l = insights::hopcroft_karp.longest_augmenting_path;
+				l = std::max(aug_path_length, l);
+			}
 			
 			std::vector<vertex_id_t<GraphT>> start_vertices;
 			auto endpoint_candidates = create_vertex_label_container(graph, char(false));
@@ -292,32 +356,92 @@ namespace g2x {
 			return augmenting_set;
 			
 		}
+
+		namespace stats {
+			template<typename T>
+			struct avg_val {
+				T sum{};
+				int samples{};
+
+				void add(T val){sum += val; ++samples;}
+				[[nodiscard]] T get() const {
+					if(samples == 0) {
+						return {};
+					} else {
+						return sum / samples;
+					}
+				}
+			};
+
+			inline thread_local std::array<avg_val<double>, 100> hopcroft_karp_deg_vs_cost;
+		}
 		
 		template<typename GraphT>
 		auto max_bipartite_matching(GraphT&& graph) {
 			
 			auto partitions = bipartite_decompose(graph).value();
 			auto matching = create_edge_label_container(graph, char(false));
+
+			auto temp_edge_cost = create_edge_label_container<float>(graph, 0.0f); ///////////
+
+			insights::hopcroft_karp = {};
 			
-			while(true) {
+			for(int stage=0;;stage++) {
 				auto aug_set = find_bipartite_augmenting_set(graph, partitions, matching);
 				if(aug_set.empty()) {
 					break;
 				}
+				if(stage==0) {
+					insights::hopcroft_karp.first_stage_match_size = aug_set.size();
+				}
+
+				double aug_path_length = insights::hopcroft_karp.longest_augmenting_path; ///////////
+				double aug_path_weight = std::log(aug_path_length); ///////////
+
+				insights::hopcroft_karp.augpath_lengths.push_back(aug_path_length);
+
 				for(const auto& idx: aug_set) {
+					temp_edge_cost[idx] += aug_path_weight; ///////////
 					matching[idx] = !matching[idx];
 				}
-				// std::println("matching size: {}, matching valid: {}", std::count(matching.begin(), matching.end(), 1), is_edge_set_matching(graph, matching));
+				++insights::hopcroft_karp.num_iterations;
+			}
+
+			for(const auto& [u, v, i]: all_edges(graph)) {
+				int degU = std::clamp<int>(std::ranges::size(outgoing_edges(graph, u)), 0, 9);
+				int degV = std::clamp<int>(std::ranges::size(outgoing_edges(graph, v)), 0, 9);
+
+				int idx = degU*10 + degV;
+				stats::hopcroft_karp_deg_vs_cost[idx].add(temp_edge_cost[i]);
 			}
 			
 			return matching;
 		}
+
+		template<typename GraphT>
+		auto max_bipartite_matching_RANDOMIZED_TEMP(GraphT&& graph, int num_attempts) {
+
+			std::vector<decltype(insights::hopcroft_karp)> results;
+			for(int i=0; i<num_attempts; i++) {
+				max_bipartite_matching(graph);
+				results.push_back(insights::hopcroft_karp);
+			}
+
+			return results;
+		}
+
+
 		
 		template<typename GraphT>
 		auto max_weight_bipartite_matching(GraphT&& graph, auto&& weights) {
-		
+			//TODO
 		}
-		
+
+		template<typename GraphT>
+		auto min_bipartite_vertex_cover(GraphT&& graph) {
+			//TODO
+		}
+
 		template<typename GraphT>
 		auto cycle_cover(GraphT&& graph) {
 		
