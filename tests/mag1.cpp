@@ -44,7 +44,7 @@ void hk73_test_avg_deg_vs_num_iters(int v, float avg_deg_min, float avg_deg_max,
 		for(int smp=0; smp<samples_per_point; smp++) {
 			time_ms += benchmark_ms(
 				[&]() {
-					graph = graph_gen::random_edges_bipartite_deg(v, v, avg_deg, g_random_generator);
+					graph = g2x::graph_gen::random_edges_bipartite_deg(v, v, avg_deg, g_random_generator);
 				},
 				[&]() {
 					auto matching = g2x::algo::max_bipartite_matching(graph);
@@ -75,7 +75,7 @@ void hk73_test_slowest_avg_deg(int v_min, int v_max, int v_step) {
 			for(int smp=0; smp<samples_per_point; smp++) {
 				benchmark_ms(
 					[&]() {
-						graph = graph_gen::random_edges_bipartite_deg(v, v, avg_deg, g_random_generator);
+						graph = g2x::graph_gen::random_edges_bipartite_deg(v, v, avg_deg, g_random_generator);
 					},
 					[&]() {
 						auto matching = g2x::algo::max_bipartite_matching(graph);
@@ -95,7 +95,7 @@ void hk73_test_slowest_avg_deg(int v_min, int v_max, int v_step) {
 
 void hk73_test_randomized_dfs() {
 
-	auto graph = graph_gen::random_edges_bipartite_deg(2000, 2000, 3.0, g_random_generator);
+	auto graph = g2x::graph_gen::random_edges_bipartite_deg(2000, 2000, 3.0, g_random_generator);
 
 	g2x::algo::config::hopcroft_karp.edge_choice_strategy = g2x::algo::config::hk73_edge_choice_strategy_t::random;
 	g2x::algo::config::hopcroft_karp.vertex_choice_strategy = g2x::algo::config::hk73_vertex_choice_strategy_t::random;

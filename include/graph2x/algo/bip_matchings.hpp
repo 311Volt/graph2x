@@ -429,35 +429,20 @@ namespace g2x {
 			auto partitions = bipartite_decompose(graph).value();
 			auto matching = create_edge_label_container(graph, char(false));
 
-			auto temp_edge_cost = create_edge_label_container<float>(graph, 0.0f); ///////////
-
 			insights::hopcroft_karp = {};
 			
-			for(int stage=0;;stage++) {
+			while(true) {
 				auto aug_set = find_bipartite_augmenting_set(graph, partitions, matching);
 				if(aug_set.empty()) {
 					break;
 				}
-
-				double aug_path_length = insights::hopcroft_karp.longest_augmenting_path; ///////////
-				double aug_path_weight = std::log(aug_path_length); ///////////
-
 				insights::hopcroft_karp.aug_set_sizes.push_back(aug_set.size());
-				insights::hopcroft_karp.aug_path_lengths.push_back(aug_path_length);
+				insights::hopcroft_karp.aug_path_lengths.push_back(insights::hopcroft_karp.longest_augmenting_path);
 
 				for(const auto& idx: aug_set) {
-					temp_edge_cost[idx] += aug_path_weight; ///////////
 					matching[idx] = !matching[idx];
 				}
 				++insights::hopcroft_karp.num_iterations;
-			}
-
-			for(const auto& [u, v, i]: all_edges(graph)) {
-				int degU = std::clamp<int>(std::ranges::size(outgoing_edges(graph, u)), 0, 9);
-				int degV = std::clamp<int>(std::ranges::size(outgoing_edges(graph, v)), 0, 9);
-
-				int idx = degU*10 + degV;
-				stats::hopcroft_karp_deg_vs_cost[idx].add(temp_edge_cost[i]);
 			}
 			
 			return matching;
