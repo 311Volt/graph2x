@@ -4,7 +4,7 @@
 
 auto& g_random = g2x::algo::config::hopcroft_karp.random_generator;
 
-void render_bfsnet_to_tikz(std::ostream& os, auto&& graph, auto&& partitions, auto&& matching, auto&& bfs_levels) {
+void render_bfsnet_to_tikz(std::ostream& os, auto&& graph, auto&& partitions, auto&& matching, auto&& bfs_levels, auto&& aug_set) {
 
 	std::unordered_map<int, float> lvl_ypos;
 	struct vec3f {
@@ -58,6 +58,9 @@ void render_bfsnet_to_tikz(std::ostream& os, auto&& graph, auto&& partitions, au
 		if(matching[i]) {
 			styles.push_back("ultra thick");
 		}
+		if(aug_set[i]) {
+			styles.push_back("blue");
+		}
 		if(not active) {
 			styles.push_back("lightgray");
 			styles.push_back("dashed");
@@ -86,7 +89,11 @@ void manual_hopcroft_karp(auto&& graph) {
 	while(true) {
 		auto bfs_levels = g2x::algo::detail::hopcroft_karp_bfs_stage(graph, partitions, matching, nullptr);
 		auto aug_set = g2x::algo::find_bipartite_augmenting_set(graph, partitions, matching);
-		render_bfsnet_to_tikz(std::cout, graph, partitions, matching, bfs_levels);
+		auto aug_set_map = g2x::create_edge_label_container(graph, char(false));
+		for(const auto& i: aug_set) {
+			aug_set_map[i] = true;
+		}
+		render_bfsnet_to_tikz(std::cout, graph, partitions, matching, bfs_levels, aug_set_map);
 		std::cout << "\n\n\n\n-------------------------------------------------\n\n\n\n";
 
 		if(aug_set.empty()) {
