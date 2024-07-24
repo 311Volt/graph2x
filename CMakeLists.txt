@@ -53,3 +53,6 @@ endif ()
 
 add_executable(mag1_test "tests/mag1.cpp")
 target_link_libraries(mag1_test PRIVATE graph2x)
+
+add_executable(hopcroft_karp_vis "tests/hopcroft_karp_vis.cpp")
+target_link_libraries(hopcroft_karp_vis PRIVATE graph2x)

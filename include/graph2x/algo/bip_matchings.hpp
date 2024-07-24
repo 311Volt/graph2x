@@ -7,6 +7,7 @@
 #include <print>
 #include <set>
 #include <algorithm>
+#include <functional>
 
 #include <math.h>
 #include <random>
@@ -117,13 +118,47 @@ namespace g2x {
 			inline thread_local struct {
 				int longest_augmenting_path = 0;
 				int num_iterations = 0;
-				int first_stage_match_size = 0;
-				std::vector<int> augpath_lengths;
+				std::vector<int> aug_path_lengths;
+				std::vector<int> aug_set_sizes;
+			} hopcroft_karp;
+		}
+
+		namespace config {
+
+			enum class hk73_edge_choice_strategy_t {
+				unspecified,
+				random,
+				lowest_ranked_first
+			};
+
+			enum class hk73_vertex_choice_strategy_t {
+				unspecified,
+				random,
+				lowest_ranked_adj_edge_first
+			};
+
+			inline thread_local struct {
+				hk73_edge_choice_strategy_t edge_choice_strategy = hk73_edge_choice_strategy_t::unspecified;
+				hk73_vertex_choice_strategy_t vertex_choice_strategy = hk73_vertex_choice_strategy_t::unspecified;
+				struct {
+					using result_type = uint64_t;
+					[[nodiscard]] static constexpr uint64_t min() {return std::numeric_limits<uint64_t>::min();}
+					[[nodiscard]] static constexpr uint64_t max() {return std::numeric_limits<uint64_t>::max();}
+					uint64_t operator()() {
+						return engine();
+					}
+					std::function<uint64_t(void)> engine = []() {
+						static thread_local std::mt19937_64 gen{std::random_device{}()};
+						return gen();
+					};
+				} random_generator;
 			} hopcroft_karp;
 		}
 
 		
 		namespace detail {
+
+
 
 
 			
@@ -235,11 +270,16 @@ namespace g2x {
 				}
 
 				std::vector<edge_t<GraphT>> out_edges = outgoing_edges(graph, start_vertex) | std::ranges::to<std::vector>();
-				// std::ranges::sort(out_edges, [&](const auto& ea, const auto& eb) {
-				// 	return rate_edge(graph, ea) < rate_edge(graph, eb);
-				// });
-				static std::mt19937_64 rand_gen{std::random_device{}()};
-				std::ranges::shuffle(out_edges, rand_gen);
+				using enum config::hk73_edge_choice_strategy_t;
+				if(config::hopcroft_karp.edge_choice_strategy == lowest_ranked_first) {
+					std::ranges::sort(out_edges, [&](const auto& ea, const auto& eb) {
+						return rate_edge(graph, ea) < rate_edge(graph, eb);
+					});
+				} else if(config::hopcroft_karp.edge_choice_strategy == random) {
+					std::ranges::shuffle(out_edges, config::hopcroft_karp.random_generator);
+				} else {
+					//TODO avoid copy for this case
+				}
 
 
 				for(const auto& [u, v, i]: out_edges/*outgoing_edges(graph, start_vertex)*/) {
@@ -271,12 +311,7 @@ namespace g2x {
 				std::vector<edge_id_t<GraphT>> augpath;
 				auto used_vertices = create_vertex_label_container<char>(graph, 0);
 
-				auto vertex_ratings = create_vertex_label_container<double>(graph, 9999.0);
-				for(const auto& e: all_edges(graph)) {
-					const auto& [u, v, i] = e;
-					vertex_ratings[u] = std::min(vertex_ratings[u], rate_edge(graph, e));
-					vertex_ratings[v] = std::min(vertex_ratings[v], rate_edge(graph, e));
-				}
+
 				
 				int dbg_num_aug_paths = 0;
 				std::optional<vertex_id_t<GraphT>> dbg_endpoint;
@@ -286,14 +321,26 @@ namespace g2x {
 					}
 				}
 
-				auto start_vertices_sorted = start_vertices | std::ranges::to<std::vector>();
-				// std::ranges::sort(start_vertices_sorted, [&](const auto& v1, const auto& v2) {
-				// 	return vertex_ratings[v1] < vertex_ratings[v2];
-				// });
-				static std::mt19937_64 rand_gen{std::random_device{}()};
-				std::ranges::shuffle(start_vertices_sorted, rand_gen);
+				auto start_vertices_vec = start_vertices | std::ranges::to<std::vector>();
+				using enum config::hk73_vertex_choice_strategy_t;
+				if(config::hopcroft_karp.vertex_choice_strategy == lowest_ranked_adj_edge_first) {
+					auto vertex_ratings = create_vertex_label_container<double>(graph, 9999.0);
+					for(const auto& e: all_edges(graph)) {
+						const auto& [u, v, i] = e;
+						vertex_ratings[u] = std::min(vertex_ratings[u], rate_edge(graph, e));
+						vertex_ratings[v] = std::min(vertex_ratings[v], rate_edge(graph, e));
+					}
+					std::ranges::sort(start_vertices_vec, [&](const auto& v1, const auto& v2) {
+						return vertex_ratings[v1] < vertex_ratings[v2];
+					});
+				} else if(config::hopcroft_karp.vertex_choice_strategy == random) {
+					std::ranges::shuffle(start_vertices_vec, config::hopcroft_karp.random_generator);
+				} else {
+					//TODO avoid copy for this case
+				}
+
 				
-				for(const auto& start_vtx: start_vertices_sorted /*start_vertices*/) {
+				for(const auto& start_vtx: start_vertices_vec /*start_vertices*/) {
 					if(used_vertices[start_vtx]) {
 						continue;
 					}
@@ -391,14 +438,12 @@ namespace g2x {
 				if(aug_set.empty()) {
 					break;
 				}
-				if(stage==0) {
-					insights::hopcroft_karp.first_stage_match_size = aug_set.size();
-				}
 
 				double aug_path_length = insights::hopcroft_karp.longest_augmenting_path; ///////////
 				double aug_path_weight = std::log(aug_path_length); ///////////
 
-				insights::hopcroft_karp.augpath_lengths.push_back(aug_path_length);
+				insights::hopcroft_karp.aug_set_sizes.push_back(aug_set.size());
+				insights::hopcroft_karp.aug_path_lengths.push_back(aug_path_length);
 
 				for(const auto& idx: aug_set) {
 					temp_edge_cost[idx] += aug_path_weight; ///////////

@@ -601,15 +601,19 @@ struct GraphGrid: public Entity {
 
 			graphUpToDate = false;
 		} else if(auto optDelVtxMsg = al::TryGetUserEventData<msg::DeleteVertex>(ev)) {
+
 			verticesForRemoval.push_back(optDelVtxMsg->get().vtxLabel);
-
 			graphUpToDate = false;
+
 		} else if(auto optDelEdgeMsg = al::TryGetUserEventData<msg::DeleteEdge>(ev)) {
-			edgesForRemoval.push_back(optDelEdgeMsg->get().edgeLabel);
 
+			edgesForRemoval.push_back(optDelEdgeMsg->get().edgeLabel);
 			graphUpToDate = false;
+
 		} else if(auto optStartEdgeMsg = al::TryGetUserEventData<msg::StartDrawingVertexEdge>(ev)) {
+
 			def.optNewEdgeSrc = findGraphNode(optStartEdgeMsg->get().beginVtxLabel);
+
 		} else if(auto optFinEdgeMsg = al::TryGetUserEventData<msg::FinishDrawingVertexEdge>(ev)) {
 			
 			if(auto* srcEdge = getOptNewEdgeSrc()) {

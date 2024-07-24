@@ -9,52 +9,11 @@
 #include <functional>
 #include <print>
 
-
-void print_bfs_net_to_tikz(std::ostream& output, auto&& graph, auto&& matching, auto&& bfs_levels) {
-
-
-
-
-}
-
+auto& g_random_generator = g2x::algo::config::hopcroft_karp.random_generator;
 
 double to_millis(auto&& duration) {
 	return std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(duration).count();
 }
-
-namespace graph_gen {
-
-	g2x::static_simple_graph random_edges_bipartite(int v1, int v2, float density) {
-		auto t0 = std::chrono::high_resolution_clock::now();
-		std::mt19937_64 gen{std::random_device{}()};
-		std::vector<std::pair<int, int>> edges;
-		for(int i=0; i<v1; i++) {
-			for(int j=0; j<v2; j++) {
-				if(std::uniform_real_distribution(0.0f, 1.0f)(gen) < density) {
-					edges.emplace_back(i, j+v1);
-				}
-			}
-		}
-		auto t1 = std::chrono::high_resolution_clock::now();
-		//std::println("generated {} edges", edges.size());
-		auto graph = g2x::static_simple_graph{v1+v2, edges};
-		auto t2 = std::chrono::high_resolution_clock::now();
-		//std::println("edge gen: {:.4f} ms, graph gen: {:.4f} ms", to_millis(t1 - t0), to_millis(t2 - t1));
-		return graph;
-	}
-
-	g2x::static_simple_graph random_edges_bipartite_card(int v1, int v2, int num_edges) {
-		float density = num_edges / (1.0f*v1*v2);
-		return random_edges_bipartite(v1, v2, density);
-	}
-
-	g2x::static_simple_graph random_edges_bipartite_deg(int v1, int v2, float avg_deg) {
-		float density = avg_deg * (v1+v2) / (2.0f*v1*v2);
-		return random_edges_bipartite(v1, v2, density);
-	}
-	
-}
-
 
 
 double benchmark_ms(const std::function<void(void)>& setup, const std::function<int(void)>& fn, int num_runs = 5) {
@@ -85,7 +44,7 @@ void hk73_test_avg_deg_vs_num_iters(int v, float avg_deg_min, float avg_deg_max,
 		for(int smp=0; smp<samples_per_point; smp++) {
 			time_ms += benchmark_ms(
 				[&]() {
-					graph = graph_gen::random_edges_bipartite_deg(v, v, avg_deg);
+					graph = graph_gen::random_edges_bipartite_deg(v, v, avg_deg, g_random_generator);
 				},
 				[&]() {
 					auto matching = g2x::algo::max_bipartite_matching(graph);
@@ -116,7 +75,7 @@ void hk73_test_slowest_avg_deg(int v_min, int v_max, int v_step) {
 			for(int smp=0; smp<samples_per_point; smp++) {
 				benchmark_ms(
 					[&]() {
-						graph = graph_gen::random_edges_bipartite_deg(v, v, avg_deg);
+						graph = graph_gen::random_edges_bipartite_deg(v, v, avg_deg, g_random_generator);
 					},
 					[&]() {
 						auto matching = g2x::algo::max_bipartite_matching(graph);
@@ -136,7 +95,11 @@ void hk73_test_slowest_avg_deg(int v_min, int v_max, int v_step) {
 
 void hk73_test_randomized_dfs() {
 
-	auto graph = graph_gen::random_edges_bipartite_deg(2000, 2000, 3.0);
+	auto graph = graph_gen::random_edges_bipartite_deg(2000, 2000, 3.0, g_random_generator);
+
+	g2x::algo::config::hopcroft_karp.edge_choice_strategy = g2x::algo::config::hk73_edge_choice_strategy_t::random;
+	g2x::algo::config::hopcroft_karp.vertex_choice_strategy = g2x::algo::config::hk73_vertex_choice_strategy_t::random;
+
 	auto data = g2x::algo::max_bipartite_matching_RANDOMIZED_TEMP(graph, 1000);
 	std::println("NumStages,LongestAugPath,AvgAugpathLength,FirstMatchSize");
 
@@ -144,13 +107,13 @@ void hk73_test_randomized_dfs() {
 
 	for(const auto& run_data: data) {
 
-		auto& al = run_data.augpath_lengths;
+		auto& al = run_data.aug_path_lengths;
 		int num_stages = al.size();
 		int longest_aug_path = al.back();
 		double avg_augpath_length = std::accumulate(al.begin(), al.end(), 0.0) / double(num_stages);
 
 
-		std::println("{},{},{:.2f},{}", num_stages, longest_aug_path, avg_augpath_length, run_data.first_stage_match_size);
+		std::println("{},{},{:.2f},{}", num_stages, longest_aug_path, avg_augpath_length, run_data.aug_set_sizes[0]);
 
 	}
 
