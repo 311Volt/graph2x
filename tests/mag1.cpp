@@ -118,9 +118,12 @@ void hk73_test_randomized_dfs() {
 	}
 
 	/*
-	 * TODO trzeba przetwarzac caly graf w pozniejszych fazach?
+	 * TODO trzeba przetwarzac caly graf w pozniejszych fazach? - dodac debug message ile V/E odrzucamy
 	 * TODO losujemy wiecej na poczatku - czy to sie przeklada na wieksza liczbe faz?
-	 * jakis parametr ktoregos ciagu w insights ktory dobrze koreluje sie z iloscia faz? */
+	 * jakis parametr ktoregos ciagu w insights ktory dobrze koreluje sie z iloscia faz?
+	 * sprawdzic "faktyczna zlozonosc" algorytmu - eksperymetalnie wyznaczona
+	 * 29.07 11:00
+	 */
 
 
 	auto match = g2x::algo::max_bipartite_matching(graph);

@@ -21,8 +21,7 @@ namespace g2x {
 		
 
 
-		template<typename GraphT>
-		auto bipartite_decompose(GraphT&& graph) {
+		auto bipartite_decompose(graph auto&& graph) {
 			
 			auto labels = create_vertex_label_container<char>(graph, -1);
 			
@@ -48,9 +47,13 @@ namespace g2x {
 			return result_type{labels};
 		}
 
-		template<typename GraphT>
-		auto find_bipartite_augmenting_path(GraphT&& graph, auto&& partitions, auto&& matching)
-			-> std::vector<edge_id_t<GraphT>>
+		template<typename GraphRefT>
+			requires graph<std::remove_cvref_t<GraphRefT>>
+		auto find_bipartite_augmenting_path(
+			GraphRefT&& graph,
+			edge_label_container_of<GraphRefT, char> auto&& partitions,
+			edge_label_container_of<GraphRefT, bool> auto&& matching
+		) -> std::vector<edge_id_t<GraphRefT>>
 		{
 			auto edge_predicate = [&](auto&& edge) {
 				const auto& [u, v, i] = edge;
@@ -81,7 +84,7 @@ namespace g2x {
 			while(auto v_opt = bfs.next_vertex()) {
 				auto v = *v_opt;
 				if(not vtx_matched[v] && partitions[v] == 1) { //augmenting path found - trace to source
-					std::vector<edge_id_t<GraphT>> result;
+					std::vector<edge_id_t<GraphRefT>> result;
 					bfs.trace_path(v, std::back_inserter(result));
 					return result;
 				}
@@ -90,9 +93,8 @@ namespace g2x {
 		}
 
 
-		template<typename GraphT>
-		bool is_edge_set_matching(GraphT&& graph, auto&& edge_set) {
-			std::set<vertex_id_t<GraphT>> endpoints;
+		bool is_edge_set_matching(graph auto&& graph, edge_label_container_of<decltype(graph), bool> auto&& edge_set) {
+			std::set<vertex_id_t<decltype(graph)>> endpoints;
 			for(const auto& [u, v, i]: all_edges(graph)) {
 				if(not edge_set[i]) {
 					continue;
@@ -104,11 +106,12 @@ namespace g2x {
 			return true;
 		}
 
-		template<typename GraphT>
-		bool is_edge_set_maximum_matching(GraphT&& graph, auto&& edge_set) {
+		bool is_edge_set_maximum_matching(
+			graph auto&& graph,
+			edge_label_container_of<decltype(graph), bool> auto&& edge_set
+		) {
 			auto partitions = bipartite_decompose(graph).value();
 			auto augpath = find_bipartite_augmenting_path(graph, partitions, edge_set);
-			// std::println("augpath size {}", augpath.size());
 			return augpath.empty();
 		}
 
@@ -165,8 +168,12 @@ namespace g2x {
 			/* Runs the BFS stage of the Hopcroft-Karp algorithm and returns a vertex-label-container of
 			 * BFS distances. In particular, unmatched left vertices have a distance of 0.
 			 */
-			template<typename GraphT>
-			auto hopcroft_karp_bfs_stage(GraphT&& graph, auto&& partitions, auto&& matching, int* out_aug_path_length) {
+			auto hopcroft_karp_bfs_stage(
+				graph auto&& graph,
+				edge_label_container_of<decltype(graph), bool> auto&& partitions,
+				edge_label_container_of<decltype(graph), bool> auto&& matching,
+				int* out_aug_path_length
+			) {
 				auto edge_predicate = [&](auto&& edge) {
 					const auto& [u, v, i] = edge;
 					if(matching[i]) {
@@ -224,8 +231,7 @@ namespace g2x {
 				return bfs_layer;
 			}
 
-			template<typename GraphT>
-			double rate_edge(GraphT&& graph, const edge_t<GraphT>& edge) {
+			double rate_edge(graph auto&& graph, const edge_t<decltype(graph)>& edge) {
 				static constexpr std::array<double, 100> lookup_table = {
 					0.000,	0.000,	0.000,	0.000,	0.000,	0.000,	0.000,	0.000,	0.000,	0.000,
 					0.000,	0.000,	0.193,	0.308,	0.402,	0.503,	0.586,	0.649,	0.744,	0.784,
@@ -247,17 +253,16 @@ namespace g2x {
 				int idx = degU*10 + degV;
 				return lookup_table[idx];
 			}
-			
-			template<typename GraphT>
+
 			bool hopcroft_karp_dfs_step(
-				GraphT&& graph,
-				const auto& matching,
-				const auto& bfs_levels,
-				const auto& endpoint_candidates,
-				const auto& used_vertices,
-				auto&& start_vertex,
-				std::optional<edge_id_t<GraphT>> source_edge,
-				auto&& output_edges)
+				graph auto&& graph,
+				edge_label_container_of<decltype(graph), bool> auto&& matching,
+				vertex_label_container_of<decltype(graph), int> auto&& bfs_levels,
+				vertex_label_container_of<decltype(graph), bool> auto&& endpoint_candidates,
+				vertex_label_container_of<decltype(graph), bool> auto&& used_vertices,
+				vertex_id_t<decltype(graph)> start_vertex,
+				std::optional<edge_id_t<decltype(graph)>> source_edge,
+				std::output_iterator<edge_id_t<decltype(graph)>> auto& output_edges)
 			{
 				bool source_matched = true;
 				if(source_edge) {
@@ -269,7 +274,7 @@ namespace g2x {
 					return true;
 				}
 
-				std::vector<edge_t<GraphT>> out_edges = outgoing_edges(graph, start_vertex) | std::ranges::to<std::vector>();
+				std::vector<edge_t<decltype(graph)>> out_edges = outgoing_edges(graph, start_vertex) | std::ranges::to<std::vector>();
 				using enum config::hk73_edge_choice_strategy_t;
 				if(config::hopcroft_karp.edge_choice_strategy == lowest_ranked_first) {
 					std::ranges::sort(out_edges, [&](const auto& ea, const auto& eb) {
@@ -298,23 +303,22 @@ namespace g2x {
 				return false;
 
 			}
-			
-			template<typename GraphT>
+
 			void hopcroft_karp_dfs_stage(
-				GraphT&& graph,
-				const auto& bfs_levels,
-				const auto& start_vertices,
-				const auto& endpoint_candidates,
+				graph auto&& graph,
+				vertex_label_container_of<decltype(graph), int> auto&& bfs_levels,
+				g2x::detail::range_of_vertices_for<decltype(graph)> auto&& start_vertices,
+				vertex_label_container_of<decltype(graph), bool> auto&& endpoint_candidates,
 				auto&& output_augmenting_set,
-				auto&& matching)
+				edge_label_container_of<decltype(graph), bool> auto&& matching)
 			{
-				std::vector<edge_id_t<GraphT>> augpath;
+				std::vector<edge_id_t<decltype(graph)>> augpath;
 				auto used_vertices = create_vertex_label_container<char>(graph, 0);
 
 
 				
 				int dbg_num_aug_paths = 0;
-				std::optional<vertex_id_t<GraphT>> dbg_endpoint;
+				std::optional<vertex_id_t<decltype(graph)>> dbg_endpoint;
 				for(const auto& v: all_vertices(graph)) {
 					if(endpoint_candidates[v]) {
 						dbg_endpoint = v;
@@ -346,9 +350,10 @@ namespace g2x {
 					}
 
 					augpath.clear();
+					auto augpath_back_inserter = std::back_inserter(augpath);
 					if(hopcroft_karp_dfs_step(
 							graph, matching, bfs_levels, endpoint_candidates,
-							used_vertices, start_vtx, std::nullopt, std::back_inserter(augpath)))
+							used_vertices, start_vtx, std::nullopt, augpath_back_inserter))
 					{
 						for(const auto& i: augpath) {
 							const auto& [u, v, _] = edge_at(graph, i);
@@ -367,9 +372,12 @@ namespace g2x {
 			}
 			
 		}
-		
-		template<typename GraphT>
-		auto find_bipartite_augmenting_set(GraphT&& graph, auto&& partitions, auto&& matching) {
+
+		auto find_bipartite_augmenting_set(
+			graph auto&& graph,
+			vertex_label_container_of<decltype(graph), char> auto&& partitions,
+			edge_label_container_of<decltype(graph), bool> auto&& matching
+		) {
 			
 			int aug_path_length = -1;
 			auto bfs_levels = detail::hopcroft_karp_bfs_stage(graph, partitions, matching, &aug_path_length);
@@ -379,7 +387,7 @@ namespace g2x {
 				l = std::max(aug_path_length, l);
 			}
 			
-			std::vector<vertex_id_t<GraphT>> start_vertices;
+			std::vector<vertex_id_t<decltype(graph)>> start_vertices;
 			auto endpoint_candidates = create_vertex_label_container(graph, char(false));
 			bool endpoint_candidates_exist = false;
 			
@@ -394,11 +402,12 @@ namespace g2x {
 			}
 
 			if(not endpoint_candidates_exist) {
-				return std::vector<edge_id_t<GraphT>>{};
+				return std::vector<edge_id_t<decltype(graph)>>{};
 			}
 			
-			std::vector<edge_id_t<GraphT>> augmenting_set;
-			detail::hopcroft_karp_dfs_stage(graph, bfs_levels, start_vertices, endpoint_candidates, std::back_inserter(augmenting_set), matching);
+			std::vector<edge_id_t<decltype(graph)>> augmenting_set;
+			auto aug_set_output = std::back_inserter(augmenting_set);
+			detail::hopcroft_karp_dfs_stage(graph, bfs_levels, start_vertices, endpoint_candidates, aug_set_output, matching);
 			
 			return augmenting_set;
 			
@@ -422,9 +431,8 @@ namespace g2x {
 
 			inline thread_local std::array<avg_val<double>, 100> hopcroft_karp_deg_vs_cost;
 		}
-		
-		template<typename GraphT>
-		auto max_bipartite_matching(GraphT&& graph) {
+
+		auto max_bipartite_matching(graph auto&& graph) {
 			
 			auto partitions = bipartite_decompose(graph).value();
 			auto matching = create_edge_label_container(graph, char(false));
@@ -448,8 +456,7 @@ namespace g2x {
 			return matching;
 		}
 
-		template<typename GraphT>
-		auto max_bipartite_matching_RANDOMIZED_TEMP(GraphT&& graph, int num_attempts) {
+		auto max_bipartite_matching_RANDOMIZED_TEMP(graph auto&& graph, int num_attempts) {
 
 			std::vector<decltype(insights::hopcroft_karp)> results;
 			for(int i=0; i<num_attempts; i++) {
@@ -461,20 +468,17 @@ namespace g2x {
 		}
 
 
-		
-		template<typename GraphT>
-		auto max_weight_bipartite_matching(GraphT&& graph, auto&& weights) {
+
+		auto max_weight_bipartite_matching(graph auto&& graph, auto&& weights) {
 			//TODO
 		}
 
-		template<typename GraphT>
-		auto min_bipartite_vertex_cover(GraphT&& graph) {
+		auto min_bipartite_vertex_cover(graph auto&& graph) {
 			//TODO
 		}
 
-		template<typename GraphT>
-		auto cycle_cover(GraphT&& graph) {
-		
+		auto cycle_cover(graph auto&& graph) {
+			//TODO
 		}
 
 

@@ -133,19 +133,32 @@ namespace g2x {
 			requires std::ranges::range<T>;
 			{*std::ranges::begin(vr)} -> std::convertible_to<edge_id_t<GraphRefT>>;
 		};
-		
-		
-		template<typename T, typename GraphRefT>
-		concept vertex_label_container_for = requires(T lc, vertex_id_t<GraphRefT> v) {
-			{lc[v]};
-		};
-		
-		template<typename T, typename GraphRefT>
-		concept edge_label_container_for = requires(T lc, edge_id_t<GraphRefT> v) {
-			{lc[v]};
-		};
+
 		
 	}
+
+
+
+	template<typename T, typename GraphRefT>
+	concept vertex_label_container_for = requires(T lc, vertex_id_t<GraphRefT> v) {
+		{lc[v]};
+	};
+
+	template<typename T, typename GraphRefT>
+	concept edge_label_container_for = requires(T lc, edge_id_t<GraphRefT> v) {
+		{lc[v]};
+	};
+
+
+	template<typename T, typename GraphRefT, typename ValueT>
+	concept vertex_label_container_of = requires(T lc, vertex_id_t<GraphRefT> v) {
+		{lc[v]} -> std::convertible_to<ValueT>;
+	};
+
+	template<typename T, typename GraphRefT, typename ValueT>
+	concept edge_label_container_of = requires(T lc, edge_id_t<GraphRefT> v) {
+		{lc[v]} -> std::convertible_to<ValueT>;
+	};
 	
 	template<typename T>
 	concept graph = requires(T graph, vertex_id_t<T> v, edge_id_t<T> e) {
@@ -157,8 +170,8 @@ namespace g2x {
 		{all_vertices(graph)} -> detail::range_of_vertices_for<T>;
 		{all_edges(graph)} -> detail::range_of_edges_for<T>;
 		{edge_at(graph, e)} -> std::convertible_to<edge_t<T>>;
-		{create_vertex_label_container(graph, 0)} -> detail::vertex_label_container_for<T>;
-		{create_edge_label_container(graph, 0)} -> detail::edge_label_container_for<T>;
+		{create_vertex_label_container(graph, 0)} -> vertex_label_container_for<T>;
+		{create_edge_label_container(graph, 0)} -> edge_label_container_for<T>;
 	};
 	
 	template<typename T>
