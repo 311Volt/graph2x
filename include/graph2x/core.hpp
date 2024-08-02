@@ -186,6 +186,9 @@ namespace g2x {
 		{remove_edge(graph, e)} -> std::convertible_to<bool>;
 	};
 
+	// this exists because std::vector<bool>
+	using boolean = char;
+
 }
 
 #endif //GRAPH2X_CORE_HPP

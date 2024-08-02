@@ -16,78 +16,121 @@ namespace g2x {
 	
 	namespace algo {
 		
-		template<typename GraphT>
+		template<graph GraphT>
 		class bfs_queue {
 		public:
-			using graph_type = GraphT;
-			using vertex_id_type = vertex_id_t<GraphT>;
-			using edge_id_type = edge_id_t<GraphT>;
-			
-			explicit bfs_queue(int num_vertices): num_vertices(num_vertices) {
-			
-			}
-			
-			void expect_full_search() {
-				storage.reserve(num_vertices);
-			}
-			
-			void push(const vertex_id_type& v) {
+			using vertex_type = vertex_id_t<GraphT>;
+
+			void push(const vertex_type& v) {
 				storage.push_back(v);
 			}
 			
-			vertex_id_type pop() {
-				if(is_empty()) {
+			vertex_type pop() {
+				if(num_pending_items() <= 0) {
 					throw std::range_error("cannot pop from an empty queue");
 				}
 				auto r = storage.at(tail++);
 				return r;
 			}
+
+			void expect_up_to(size_t num_items) {
+				storage.reserve(num_items);
+			}
 			
-			[[nodiscard]] bool is_empty() const {
-				return storage.size() <= tail;
+			[[nodiscard]] size_t num_pending_items() const {
+				return storage.size() - tail;
+			}
+
+			auto pending_items() {
+				return std::span<const vertex_type> {
+					storage.data() + tail,
+					storage.data() + storage.size()
+				};
+			}
+
+			auto processed_items() {
+				return std::span<const vertex_type> {
+					storage.data(),
+					storage.data() + tail
+				};
+			}
+
+			void reset() {
+				storage.resize(0);
+				tail = 0;
 			}
 		private:
-			std::vector<vertex_id_type> storage;
-			int num_vertices;
+			std::vector<vertex_type> storage;
 			size_t tail = 0;
 		};
 		
 		template<typename GraphT>
 		class dfs_stack {
-		
 		public:
-			using graph_type = GraphT;
-			using vertex_id_type = vertex_id_t<GraphT>;
-			using edge_id_type = edge_id_t<GraphT>;
-			
-			explicit dfs_stack(int num_vertices) {
-			
+
+			using vertex_type = vertex_id_t<GraphT>;
+
+
+
+			void push(const vertex_type& v) {
+				storage_stack.push_back(v);
 			}
-			
-			void expect_full_search() {
-				storage.reserve(num_vertices);
-			}
-			
-			void push(const vertex_id_type& v) {
-				storage.push_back(v);
-			}
-			vertex_id_type pop() {
-				if(is_empty()) {
+
+			vertex_type pop() {
+				if(num_pending_items() <= 0) {
 					throw std::range_error("cannot pop from an empty queue");
 				}
-				auto r = storage.back();
-				storage.pop_back();
+				auto r = storage_stack.back();
+				storage_stack.pop_back();
+				storage_popped.push_back(r);
 				return r;
 			}
-			[[nodiscard]] bool is_empty() const {
-				return storage.empty();
+
+			void expect_up_to(size_t num_items) {
+				storage_stack.reserve(num_items);
+				storage_popped.reserve(num_items);
+			}
+
+			[[nodiscard]] size_t num_pending_items() const {
+				return storage_stack.size();
+			}
+
+			auto pending_items() {
+				return std::span<const vertex_type> {storage_stack};
+			}
+
+			auto processed_items() {
+				return std::span<const vertex_type> {storage_popped};
+			}
+
+			void reset() {
+				storage_stack.resize(0);
+				storage_popped.resize(0);
 			}
 		private:
-			int num_vertices;
-			std::vector<vertex_id_type> storage;
+			std::vector<vertex_type> storage_stack;
+			std::vector<vertex_type> storage_popped;
+		};
+
+		template<typename T>
+		concept graph_search_structure = requires(T x, typename T::vertex_type v) {
+			{x.push(v)};
+			{x.pop()} -> std::convertible_to<typename T::vertex_type>;
+			{x.expect_up_to(0)};
+			{x.num_pending_items()} -> std::convertible_to<size_t>;
+			{x.pending_items()} -> std::ranges::range;
+			{x.processed_items()} -> std::ranges::range;
+			{x.reset()};
 		};
 		
-		template<typename GraphT, template<class> class SearcherTTP, typename EdgePredicateRefT = const detail::always_true&>
+		template<
+			graph GraphT,
+			template<class> class SearchStructureTTP,
+			typename EdgePredicateRefT = const detail::always_true&,
+			typename VertexPredicateRefT = const detail::always_true&,
+			typename AdjacencyProjectionRefT = const std::identity&
+		>
+			requires graph_search_structure<SearchStructureTTP<GraphT>>
 		class generic_graph_search {
 		public:
 			using graph_type = GraphT;
@@ -95,57 +138,71 @@ namespace g2x {
 			using edge_id_type = edge_id_t<GraphT>;
 			using edge_type = edge_t<GraphT>;
 			
-			explicit generic_graph_search(const GraphT& graph, EdgePredicateRefT&& edge_predicate = edge_predicate_type{})
-				: graph(graph),
-				  searcher(num_vertices(graph)),
-				  edge_container(create_vertex_label_container(graph, edge_opt{})),
-				  state_container(create_vertex_label_container(graph, vertex_search_state::unvisited)),
-				  edge_predicate(std::forward<EdgePredicateRefT>(edge_predicate))
+			explicit generic_graph_search(
+				const GraphT& graph,
+				EdgePredicateRefT&& edge_predicate = edge_predicate_type{},
+				VertexPredicateRefT&& vertex_predicate = vertex_predicate_type{},
+				AdjacencyProjectionRefT&& adjacency_projection = adjacency_projection_type{}
+			)
+				: graph_(graph),
+				  search_structure_(),
+				  state_container_(create_vertex_label_container(graph, vertex_search_state::unvisited)),
+				  source_edge_container_(create_vertex_label_container<edge_opt>(graph)),
+				  edge_predicate_(std::forward<EdgePredicateRefT>(edge_predicate)),
+				  vertex_predicate_(std::forward<VertexPredicateRefT>(vertex_predicate)),
+				  adjacency_projection_(std::forward<AdjacencyProjectionRefT>(adjacency_projection))
 			{}
 			
 			generic_graph_search(generic_graph_search&&) = default;
 			generic_graph_search& operator=(generic_graph_search&&) = default;
-			
+
+
 			
 			void add_vertex(const vertex_id_type& v) {
 				if(get_vertex_state(v) != vertex_search_state::unvisited) {
 					throw std::runtime_error("cannot add a marked/visited vertex for searching");
 				}
-				searcher.push(v);
-				state_container.at(v) = vertex_search_state::marked;
+				search_structure_.push(v);
+				state_container_.at(v) = vertex_search_state::marked;
 			}
 			
 			std::optional<vertex_id_type> next_vertex() {
 				if(is_finished()) {
 					return std::nullopt;
 				}
-				auto vtx = searcher.pop();
-				state_container[vtx] = vertex_search_state::visited;
-				for(const auto& edge: outgoing_edges(graph, vtx)) {
+				auto vtx = search_structure_.pop();
+				state_container_[vtx] = vertex_search_state::visited;
+				auto&& outgoing_edges_view = outgoing_edges(this->graph_, vtx);
+				for(const auto& edge: adjacency_projection_(outgoing_edges_view)) {
 					const auto& [u, v, i] = edge;
-					if(edge_predicate(edge) && get_vertex_state(v) == vertex_search_state::unvisited) {
+					if(    get_vertex_state(v) == vertex_search_state::unvisited
+						&& edge_predicate_(edge)
+						&& vertex_predicate_(v)
+					) {
 						add_vertex(v);
-						edge_container.at(v) = edge;
+						source_edge_container_[v] = edge;
 					}
 				}
 				return vtx;
 			}
 			
 			[[nodiscard]] vertex_search_state get_vertex_state(const vertex_id_type& v) const {
-				return state_container[v];
+				return state_container_[v];
 			}
 			
 			std::optional<edge_type> next_edge() {
 				while(auto v_opt = next_vertex()) {
-					if(edge_container[*v_opt].has_value()) {
-						return *edge_container[*v_opt];
+					if(source_edge(*v_opt).has_value()) {
+						return source_edge(*v_opt);
 					}
 				}
 				return std::nullopt;
 			}
-			
-			template<typename ContainerT>
-			void update_distances(const vertex_id_type& vtx, ContainerT&& vtx_label_container) {
+
+			void update_distances(
+				const vertex_id_type& vtx,
+				vertex_label_container_of<GraphT, int> auto&& vtx_label_container
+			) {
 				if(auto opt_edge = source_edge(vtx)) {
 					const auto& [u, v, i] = *opt_edge;
 					vtx_label_container[v] = vtx_label_container[u] + 1;
@@ -155,11 +212,11 @@ namespace g2x {
 			}
 			
 			std::optional<edge_type> source_edge(const vertex_id_type& v) {
-				return edge_container[v];
+				return source_edge_container_[v];
 			}
 			
 			[[nodiscard]] bool is_finished() const {
-				return searcher.is_empty();
+				return search_structure_.num_pending_items() == 0;
 			}
 
 			void trace_path(const vertex_id_type& vtx, auto&& out_edge_ids) {
@@ -170,29 +227,67 @@ namespace g2x {
 					*out_edge_ids++ = i;
 				}
 			}
+
+			void reset() {
+
+				int full_reset_threshold = num_vertices(graph_) / 4;
+				if(std::ranges::size(search_structure_.processed_items()) > full_reset_threshold) {
+					std::ranges::fill(state_container_, vertex_search_state::unvisited);
+					std::ranges::fill(source_edge_container_, edge_opt{});
+				} else {
+					for(const auto& v: search_structure_.pending_items()) {
+						state_container_[v] = vertex_search_state::unvisited;
+					}
+					for(const auto& v: search_structure_.processed_items()) {
+						state_container_[v] = vertex_search_state::unvisited;
+						source_edge_container_[v] = std::nullopt;
+					}
+				}
+
+				search_structure_.reset();
+			}
+
+			void expect_up_to(int num_vertices) {
+				search_structure_.expect_up_to(num_vertices);
+			}
 		
 		private:
 			
 			using edge_opt = std::optional<edge_type>;
 			using edge_container_type = decltype(create_vertex_label_container<edge_opt, GraphT>(std::declval<GraphT>()));
 			using state_container_type = decltype(create_vertex_label_container<vertex_search_state, GraphT>(std::declval<GraphT>()));
+
 			using edge_predicate_type = std::remove_cvref_t<EdgePredicateRefT>;
+			using vertex_predicate_type = std::remove_cvref_t<VertexPredicateRefT>;
+			using adjacency_projection_type = std::remove_cvref_t<AdjacencyProjectionRefT>;
 			
-			const GraphT& graph;
+			const GraphT& graph_;
 			
-			SearcherTTP<GraphT> searcher;
-			
-			edge_container_type edge_container;
-			state_container_type state_container;
-			
-			edge_predicate_type edge_predicate;
+			SearchStructureTTP<GraphT> search_structure_;
+
+			edge_container_type source_edge_container_;
+			state_container_type state_container_;
+
+			edge_predicate_type edge_predicate_;
+			vertex_predicate_type vertex_predicate_;
+			adjacency_projection_type adjacency_projection_;
 		};
 		
-		template<typename GraphT, typename EdgePredicateRefT = const detail::always_true&>
-		using breadth_first_search = generic_graph_search<GraphT, bfs_queue, EdgePredicateRefT>;
+		template<
+			typename GraphT,
+			typename EdgePredicateRefT = const detail::always_true&,
+			typename VertexPredicateRefT = const detail::always_true&,
+			typename AdjacencyProjectionRefT = const std::identity&
+		>
+		using breadth_first_search = generic_graph_search<GraphT, bfs_queue, EdgePredicateRefT, VertexPredicateRefT, AdjacencyProjectionRefT>;
 		
-		template<typename GraphT, typename EdgePredicateRefT = const detail::always_true&>
-		using depth_first_search = generic_graph_search<GraphT, dfs_stack, EdgePredicateRefT>;
+		template<
+			typename GraphT,
+			typename EdgePredicateRefT = const detail::always_true&,
+			typename VertexPredicateRefT = const detail::always_true&,
+			typename AdjacencyProjectionRefT = const std::identity&
+		>
+		using depth_first_search = generic_graph_search<GraphT, dfs_stack, EdgePredicateRefT, VertexPredicateRefT, AdjacencyProjectionRefT>;
 		
 		
 		template<typename SearchT, typename IdxOrRangeT>
@@ -207,7 +302,7 @@ namespace g2x {
 		}
 		
 		
-		template<typename GraphT, typename IdxOrRangeT>
+		template<graph GraphT, typename IdxOrRangeT>
 		auto simple_edges_bfs(const GraphT& graph, IdxOrRangeT&& start = {}) {
 			breadth_first_search bfs(graph);
 			generic_init_search(bfs, start);
@@ -216,7 +311,7 @@ namespace g2x {
 			});
 		}
 		
-		template<typename GraphT, typename IdxOrRangeT>
+		template<graph GraphT, typename IdxOrRangeT>
 		auto simple_vertices_bfs(const GraphT& graph, IdxOrRangeT&& start = {}) {
 			breadth_first_search bfs(graph);
 			generic_init_search(bfs, start);
@@ -225,7 +320,7 @@ namespace g2x {
 			});
 		}
 		
-		template<typename GraphT, typename IdxOrRangeT>
+		template<graph GraphT, typename IdxOrRangeT>
 		auto simple_edges_dfs(const GraphT& graph, IdxOrRangeT&& start = {}) {
 			depth_first_search dfs(graph);
 			generic_init_search(dfs, start);
@@ -234,7 +329,7 @@ namespace g2x {
 			});
 		}
 		
-		template<typename GraphT, typename IdxOrRangeT>
+		template<graph GraphT, typename IdxOrRangeT>
 		auto simple_vertices_dfs(const GraphT& graph, IdxOrRangeT&& start = {}) {
 			depth_first_search dfs(graph);
 			generic_init_search(dfs, start);

@@ -456,17 +456,177 @@ namespace g2x {
 			return matching;
 		}
 
-		auto max_bipartite_matching_RANDOMIZED_TEMP(graph auto&& graph, int num_attempts) {
+		auto greedy_maximal_matching(graph auto&& graph) {
 
-			std::vector<decltype(insights::hopcroft_karp)> results;
-			for(int i=0; i<num_attempts; i++) {
-				max_bipartite_matching(graph);
-				results.push_back(insights::hopcroft_karp);
+			auto matching = create_edge_label_container<boolean>(graph, false);
+			auto matched_vertices = create_vertex_label_container<boolean>(graph, false);
+
+			for(const auto& u: all_vertices(graph)) {
+				for(const auto& [_, v, i]: outgoing_edges(graph, u)) {
+					if(not matched_vertices[u] && not matched_vertices[v]) {
+						matching[i] = true;
+						matched_vertices[u] = true;
+						matched_vertices[v] = true;
+					}
+					break;
+				}
 			}
 
-			return results;
+			return matching;
 		}
 
+		auto new_max_bipartite_matching(graph auto&& graph) {
+
+			insights::hopcroft_karp = {};
+
+			auto partitions = bipartite_decompose(graph).value();
+			auto matching = create_edge_label_container<boolean>(graph, false);
+
+			auto bfs_levels = create_vertex_label_container<int>(graph);
+			auto matched_vertices = create_vertex_label_container<boolean>(graph, false);
+
+			//initialize to a greedy maximal matching
+			for(const auto& u: all_vertices(graph)) {
+				if(partitions[u] == 1) {
+					continue;
+				}
+				for(const auto& [_, v, i]: outgoing_edges(graph, u)) {
+					if(not matched_vertices[u] && not matched_vertices[v]) {
+						matching[i] = true;
+						matched_vertices[u] = true;
+						matched_vertices[v] = true;
+						break;
+					}
+				}
+			}
+
+			std::vector<edge_id_t<decltype(graph)>> aug_set;
+			aug_set.reserve(num_vertices(graph));
+			auto aug_set_vtx_map = create_vertex_label_container<boolean>(graph, false);
+
+			std::vector<vertex_id_t<decltype(graph)>> augpath_begin_candidates;
+			augpath_begin_candidates.reserve(num_vertices(graph));
+
+			auto edge_predicate = [&](auto&& edge) {
+				const auto& [u, v, i] = edge;
+				if(matching[i]) {
+					return partitions[u] == 1 && partitions[v] == 0;
+				} else {
+					return partitions[u] == 0 && partitions[v] == 1;
+				}
+			};
+			auto dfs_stage_edge_predicate = [&](auto&& edge) {
+				const auto& [u, v, i] = edge;
+				return bfs_levels[v] - bfs_levels[u] == 1 && matching[i] == (bfs_levels[u] % 2);
+			};
+			auto dfs_stage_vertex_predicate = [&](auto&& vertex) {
+				return not aug_set_vtx_map[vertex];
+			};
+			auto is_vtx_left_unmatched = [&](auto&& v){return partitions[v] == 0 && not matched_vertices[v];};
+			auto is_vtx_right_unmatched = [&](auto&& v){return partitions[v] == 1 && not matched_vertices[v];};
+
+
+			breadth_first_search bfs(graph, edge_predicate);
+			depth_first_search dfs(graph, dfs_stage_edge_predicate, dfs_stage_vertex_predicate);
+
+			bfs.expect_up_to(num_vertices(graph));
+			dfs.expect_up_to(num_vertices(graph));
+
+
+			for(int it=0;;it++) {
+				// std::println("new iteration");
+
+				// BFS stage
+
+				int phase_aug_path_length = std::numeric_limits<int>::max();
+
+				if(it > 0) {
+					bfs.reset();
+					augpath_begin_candidates.clear();
+				}
+				for(const auto& v: all_vertices(graph)) {
+					bfs_levels[v] = -9999;
+					if(is_vtx_left_unmatched(v)) {
+						augpath_begin_candidates.push_back(v);
+						bfs.add_vertex(v);
+					}
+				}
+
+				while(auto v_opt = bfs.next_vertex()) {
+					auto v = *v_opt;
+					bfs.update_distances(v, bfs_levels);
+					auto cur_distance = bfs_levels[v];
+					if(is_vtx_right_unmatched(v)) {
+						if(cur_distance > phase_aug_path_length) {
+							break;
+						}
+						phase_aug_path_length = cur_distance;
+					}
+				}
+
+				if(phase_aug_path_length == std::numeric_limits<int>::max()) {
+					break;
+				}
+
+				// DFS stage
+
+				for(const auto& v_begin: augpath_begin_candidates) {
+
+					dfs.reset();
+					dfs.add_vertex(v_begin);
+
+					int aug_path_begin = aug_set.size();
+
+					while(auto v_opt = dfs.next_vertex()) {
+						if(is_vtx_right_unmatched(*v_opt) && bfs_levels[*v_opt] == phase_aug_path_length) {
+							dfs.trace_path(*v_opt, std::back_inserter(aug_set));
+							break;
+						}
+					}
+					std::span aug_path {aug_set.begin()+aug_path_begin, aug_set.end()};
+
+					// if(aug_path.size()) std::println("augpath found [{}]: ", phase_aug_path_length);
+					for(const auto& i: aug_path) {
+						const auto& [u, v, _] = edge_at(graph, i);
+						// if(aug_path.size()) std::print("{}-{}{} ", u, v, matching[i] ? '#' : '.');
+						aug_set_vtx_map[u] = true;
+						aug_set_vtx_map[v] = true;
+					}
+					// if(aug_path.size()) std::println("");
+
+				}
+
+
+				// flip edges, prepare for next phase
+
+				for(const auto& i: aug_set) {
+					matching[i] = !matching[i];
+
+					const auto& [u, v, _] = edge_at(graph, i);
+					aug_set_vtx_map[u] = false;
+					aug_set_vtx_map[v] = false;
+
+					matched_vertices[u] = true;
+					matched_vertices[v] = true;
+				}
+				aug_set.clear();
+
+				++insights::hopcroft_karp.num_iterations;
+
+			}
+
+			// std::println("{} iterations", insights::hopcroft_karp.num_iterations);
+			//
+			// //DEBUG DELET THIS
+			// if(not is_edge_set_matching(graph, matching)) {
+			// 	throw std::runtime_error("found a non-matching");
+			// }
+			// if(not is_edge_set_maximum_matching(graph, matching)) {
+			// 	throw std::runtime_error("found a non-maximum matching");
+			// }
+
+			return matching;
+		}
 
 
 		auto max_weight_bipartite_matching(graph auto&& graph, auto&& weights) {

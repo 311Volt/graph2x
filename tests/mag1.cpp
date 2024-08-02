@@ -96,26 +96,27 @@ void hk73_test_slowest_avg_deg(int v_min, int v_max, int v_step) {
 void hk73_test_randomized_dfs() {
 
 	auto graph = g2x::graph_gen::random_edges_bipartite_deg(2000, 2000, 3.0, g_random_generator);
-
-	g2x::algo::config::hopcroft_karp.edge_choice_strategy = g2x::algo::config::hk73_edge_choice_strategy_t::random;
-	g2x::algo::config::hopcroft_karp.vertex_choice_strategy = g2x::algo::config::hk73_vertex_choice_strategy_t::random;
-
-	auto data = g2x::algo::max_bipartite_matching_RANDOMIZED_TEMP(graph, 1000);
-	std::println("NumStages,LongestAugPath,AvgAugpathLength,FirstMatchSize");
-
-
-
-	for(const auto& run_data: data) {
-
-		auto& al = run_data.aug_path_lengths;
-		int num_stages = al.size();
-		int longest_aug_path = al.back();
-		double avg_augpath_length = std::accumulate(al.begin(), al.end(), 0.0) / double(num_stages);
-
-
-		std::println("{},{},{:.2f},{}", num_stages, longest_aug_path, avg_augpath_length, run_data.aug_set_sizes[0]);
-
-	}
+	//
+	// g2x::algo::config::hopcroft_karp.edge_choice_strategy = g2x::algo::config::hk73_edge_choice_strategy_t::random;
+	// g2x::algo::config::hopcroft_karp.vertex_choice_strategy = g2x::algo::config::hk73_vertex_choice_strategy_t::random;
+	//
+	//
+	// auto data = g2x::algo::max_bipartite_matching(graph);
+	// std::println("NumStages,LongestAugPath,AvgAugpathLength,FirstMatchSize");
+	//
+	//
+	//
+	// for(const auto& run_data: data) {
+	//
+	// 	auto& al = run_data.aug_path_lengths;
+	// 	int num_stages = al.size();
+	// 	int longest_aug_path = al.back();
+	// 	double avg_augpath_length = std::accumulate(al.begin(), al.end(), 0.0) / double(num_stages);
+	//
+	//
+	// 	std::println("{},{},{:.2f},{}", num_stages, longest_aug_path, avg_augpath_length, run_data.aug_set_sizes[0]);
+	//
+	// }
 
 	/*
 	 * TODO trzeba przetwarzac caly graf w pozniejszych fazach? - dodac debug message ile V/E odrzucamy
@@ -136,26 +137,26 @@ void hk73_test_randomized_dfs() {
 
 int main() {
 
-	hk73_test_randomized_dfs();
+	// hk73_test_randomized_dfs();
 
-	// hk73_test_avg_deg_vs_num_iters(500, 1.0, 5.0, 0.02);
-	//
-	// std::println("cost stats: ");
-	// for(int u=0; u<10; u++) {
-	// 	for(int v=0; v<10; v++) {
-	// 		std::print("{:.3f},\t", g2x::algo::stats::hopcroft_karp_deg_vs_cost[u*10+v].get());
-	// 	}
-	// 	std::println("");
-	// }
-	//
-	// std::println("samples: ");
-	// for(int u=0; u<10; u++) {
-	// 	for(int v=0; v<10; v++) {
-	// 		std::print("{}\t", g2x::algo::stats::hopcroft_karp_deg_vs_cost[u*10+v].samples);
-	// 	}
-	// 	std::println("");
-	// }
+	 hk73_test_avg_deg_vs_num_iters(500, 1.0, 5.0, 0.02);
 
-	//hk73_test_avg_deg_vs_num_iters(2000, 2.5, 3.5, 0.001);
+	//  std::println("cost stats: ");
+	//  for(int u=0; u<10; u++) {
+	//  	for(int v=0; v<10; v++) {
+	//  		std::print("{:.3f},\t", g2x::algo::stats::hopcroft_karp_deg_vs_cost[u*10+v].get());
+	//  	}
+	//  	std::println("");
+	//  }
+	//
+	//  std::println("samples: ");
+	//  for(int u=0; u<10; u++) {
+	//  	for(int v=0; v<10; v++) {
+	//  		std::print("{}\t", g2x::algo::stats::hopcroft_karp_deg_vs_cost[u*10+v].samples);
+	//  	}
+	//  	std::println("");
+	//  }
+	//
+	// hk73_test_avg_deg_vs_num_iters(2000, 2.5, 3.5, 0.001);
 
 }
