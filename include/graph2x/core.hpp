@@ -21,18 +21,24 @@ namespace g2x {
 	template<typename GraphRefT>
 	using edge_id_t = typename std::remove_cvref_t<GraphRefT>::edge_id_type;
 
-	template<typename VtxIdT, typename EdgeIdT>
-	struct edge_value {
-		VtxIdT u;
-		VtxIdT v;
-		EdgeIdT i;
-	};
+
 
 	template<typename VtxIdT, typename EdgeIdT>
 	struct edge_view {
 		detail::cref_or_integral_value<VtxIdT> u;
 		detail::cref_or_integral_value<VtxIdT> v;
 		detail::cref_or_integral_value<EdgeIdT> i;
+	};
+
+	template<typename VtxIdT, typename EdgeIdT>
+	struct edge_value {
+		VtxIdT u;
+		VtxIdT v;
+		EdgeIdT i;
+
+		operator edge_view<VtxIdT, EdgeIdT>() const {
+			return {u, v, i};
+		}
 	};
 
 	template<typename GraphRefT>

@@ -534,7 +534,6 @@ namespace g2x {
 
 
 			for(int it=0;;it++) {
-				// std::println("new iteration");
 
 				// BFS stage
 
@@ -607,18 +606,7 @@ namespace g2x {
 				aug_set.clear();
 
 				++insights::hopcroft_karp.num_iterations;
-
 			}
-
-			// std::println("{} iterations", insights::hopcroft_karp.num_iterations);
-			//
-			// //DEBUG DELET THIS
-			// if(not is_edge_set_matching(graph, matching)) {
-			// 	throw std::runtime_error("found a non-matching");
-			// }
-			// if(not is_edge_set_maximum_matching(graph, matching)) {
-			// 	throw std::runtime_error("found a non-maximum matching");
-			// }
 
 			return matching;
 		}

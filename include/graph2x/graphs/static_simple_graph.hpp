@@ -34,9 +34,7 @@ namespace g2x {
 	private:
 		int num_vertices_;
 
-		std::vector<vertex_id_type> source_vtx_storage;
-		std::vector<vertex_id_type> dest_vtx_storage;
-		std::vector<edge_id_type> edge_idx_storage;
+		std::vector<edge_value_type> edge_storage;
 
 		//the i-th and i+1-th elements denote the index range of adjacency_storage
 		std::vector<int> adjacency_regions;
@@ -54,49 +52,45 @@ namespace g2x {
 			this->num_vertices_ = num_vertices;
 
 			int num_edges = 0;
-			{
-				std::vector<std::tuple<vertex_id_type, vertex_id_type, edge_id_type>> edge_set;
-				for(const auto& [vtx1, vtx2]: edges) {
-					if(vtx1 == vtx2) {
-						throw std::runtime_error("Loops are not allowed");
-					}
-					if(vtx1 < 0 || vtx2 < 0 || vtx1 >= num_vertices_ || vtx2 >= num_vertices_) {
-						throw std::runtime_error("vertex indices out of range");
-					}
 
-					edge_set.push_back({vtx1, vtx2, num_edges});
-					edge_set.push_back({vtx2, vtx1, num_edges});
-					++num_edges;
-				}
-				std::sort(edge_set.begin(), edge_set.end());
-
-				source_vtx_storage.resize(edge_set.size());
-				dest_vtx_storage.resize(edge_set.size());
-				edge_idx_storage.resize(edge_set.size());
-				for(int i=0; i<edge_set.size(); i++) {
-					const auto& [u, v, idx] = edge_set[i];
-					source_vtx_storage[i] = u;
-					dest_vtx_storage[i] = v;
-					edge_idx_storage[i] = idx;
-				}
+			if constexpr(std::ranges::sized_range<std::remove_cvref_t<decltype(edges)>>) {
+				edge_storage.reserve(std::ranges::size(edges));
 			}
+
+			for(const auto& [vtx1, vtx2]: edges) {
+				if(vtx1 == vtx2) {
+					throw std::runtime_error("Loops are not allowed");
+				}
+				if(vtx1 < 0 || vtx2 < 0 || vtx1 >= num_vertices_ || vtx2 >= num_vertices_) {
+					throw std::runtime_error("vertex indices out of range");
+				}
+
+				edge_storage.push_back({vtx1, vtx2, num_edges});
+				edge_storage.push_back({vtx2, vtx1, num_edges});
+				++num_edges;
+			}
+			std::sort(edge_storage.begin(), edge_storage.end(), [](auto&& e1, auto&& e2) {
+				const auto& [u1, v1, i1] = e1;
+				const auto& [u2, v2, i2] = e2;
+				return std::make_tuple(u1, v1, i1) < std::make_tuple(u2, v2, i2);
+			});
 
 
 			offset_of_edge.resize(num_edges);
-			for(int i=edge_idx_storage.size()-1; i>=0; i--) {
-				offset_of_edge[edge_idx_storage[i]] = i;
+			for(int i=edge_storage.size()-1; i>=0; i--) {
+				offset_of_edge[edge_storage[i].i] = i;
 			}
 			
 
 			adjacency_regions.resize(this->num_vertices_ + 1);
 			adjacency_regions.front() = 0;
-			adjacency_regions.back() = source_vtx_storage.size();
+			adjacency_regions.back() = edge_storage.size();
 			for(int v=0; v<num_vertices_; v++) {
 				if(v > 0) {
 					adjacency_regions[v] = adjacency_regions[v-1];
 				}
 				auto& i = adjacency_regions[v];
-				while(i < source_vtx_storage.size() && source_vtx_storage[i] < v) {
+				while(i < edge_storage.size() && edge_storage[i].u < v) {
 					i++;
 				}
 			}
@@ -111,28 +105,26 @@ namespace g2x {
 		[[nodiscard]] int num_edges() const {
 			return offset_of_edge.size();
 		}
-		
-		[[nodiscard]] bool is_adjacent(int u, int v) const {
-			auto [beg, end] = get_adjacency_range(u);
-			return std::binary_search(&dest_vtx_storage[beg], &dest_vtx_storage[end], v);
-		}
-
-		[[nodiscard]] auto adjacent_vertices(int u) const {
-			auto [beg, end] = get_adjacency_range(u);
-			return std::span {dest_vtx_storage.data()+beg, dest_vtx_storage.data()+end};
-		}
-
-		[[nodiscard]] auto edge_at(int index) const {
-			auto idx = offset_of_edge[index];
-			return edge_view_type {source_vtx_storage[idx], dest_vtx_storage[idx], index};
-		}
 
 		[[nodiscard]] auto outgoing_edges(int u) const {
 			auto [beg, end] = get_adjacency_range(u);
 
-			return std::views::iota(beg, end) | std::views::transform([&](auto&& idx) {
-				return edge_view_type {source_vtx_storage[idx], dest_vtx_storage[idx], edge_idx_storage[idx]};
-			});
+			return std::span{edge_storage.data() + beg, edge_storage.data() + end};
+		}
+		
+		[[nodiscard]] bool is_adjacent(int u, int v) const {
+			static constexpr auto edge_relation = [](const edge_value_type& e1, const edge_value_type& e2) {
+				return std::make_tuple(e1.u, e1.v) < std::make_tuple(e2.u, e2.v);
+			};
+			return std::ranges::binary_search(outgoing_edges(u), edge_value_type{u, v, 0}, edge_relation);
+		}
+
+		[[nodiscard]] auto adjacent_vertices(int u) const {
+			return outgoing_edges(u) | std::views::transform([](const edge_value_type& e){return e.v;});
+		}
+
+		[[nodiscard]] auto edge_at(int index) const {
+			return edge_storage[offset_of_edge[index]];
 		}
 
 		[[nodiscard]] auto all_vertices() const {
@@ -140,9 +132,7 @@ namespace g2x {
 		}
 		
 		[[nodiscard]] auto all_edges() const {
-			return offset_of_edge | std::views::transform([this](auto&& off) {
-				return edge_view_type {source_vtx_storage[off], dest_vtx_storage[off], edge_idx_storage[off]};
-			});
+			return edge_storage | std::views::filter([](const edge_value_type& e){return e.u < e.v;});
 		}
 		
 		template<typename T>
