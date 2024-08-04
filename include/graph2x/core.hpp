@@ -42,7 +42,7 @@ namespace g2x {
 	};
 
 	template<typename GraphRefT>
-	using edge_t = edge_view<vertex_id_t<GraphRefT>, edge_id_t<GraphRefT>>;
+	using edge_t = edge_value<vertex_id_t<GraphRefT>, edge_id_t<GraphRefT>>;
 	
 	
 	template<typename GraphRefT>
