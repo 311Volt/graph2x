@@ -80,13 +80,13 @@ namespace g2x {
 	}
 
 	template<typename T, typename GraphRefT>
-	auto create_vertex_label_container(GraphRefT&& graph, T value = {}) {
-		return graph.template create_vertex_label_container<T>(value);
+	auto create_vertex_labeling(GraphRefT&& graph, T value = {}) {
+		return graph.template create_vertex_labeling<T>(value);
 	}
 
 	template<typename T, typename GraphRefT>
-	auto create_edge_label_container(GraphRefT&& graph, T value = {}) {
-		return graph.template create_edge_label_container<T>(value);
+	auto create_edge_labeling(GraphRefT&& graph, T value = {}) {
+		return graph.template create_edge_labeling<T>(value);
 	}
 	
 	template<typename GraphRefT>
@@ -140,23 +140,23 @@ namespace g2x {
 
 
 	template<typename T, typename GraphRefT>
-	concept vertex_label_container_for = requires(T lc, vertex_id_t<GraphRefT> v) {
+	concept vertex_labeling_for = requires(T lc, vertex_id_t<GraphRefT> v) {
 		{lc[v]};
 	};
 
 	template<typename T, typename GraphRefT>
-	concept edge_label_container_for = requires(T lc, edge_id_t<GraphRefT> v) {
+	concept edge_labeling_for = requires(T lc, edge_id_t<GraphRefT> v) {
 		{lc[v]};
 	};
 
 
 	template<typename T, typename GraphRefT, typename ValueT>
-	concept vertex_label_container_of = requires(T lc, vertex_id_t<GraphRefT> v) {
+	concept vertex_labeling_of = requires(T lc, vertex_id_t<GraphRefT> v) {
 		{lc[v]} -> std::convertible_to<ValueT>;
 	};
 
 	template<typename T, typename GraphRefT, typename ValueT>
-	concept edge_label_container_of = requires(T lc, edge_id_t<GraphRefT> v) {
+	concept edge_labeling_of = requires(T lc, edge_id_t<GraphRefT> v) {
 		{lc[v]} -> std::convertible_to<ValueT>;
 	};
 	
@@ -170,8 +170,8 @@ namespace g2x {
 		{all_vertices(graph)} -> detail::range_of_vertices_for<T>;
 		{all_edges(graph)} -> detail::range_of_edges_for<T>;
 		{edge_at(graph, e)} -> std::convertible_to<edge_t<T>>;
-		{create_vertex_label_container(graph, 0)} -> vertex_label_container_for<T>;
-		{create_edge_label_container(graph, 0)} -> edge_label_container_for<T>;
+		{create_vertex_labeling(graph, 0)} -> vertex_labeling_for<T>;
+		{create_edge_labeling(graph, 0)} -> edge_labeling_for<T>;
 	};
 	
 	template<typename T>

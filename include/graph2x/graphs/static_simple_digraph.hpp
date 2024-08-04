@@ -114,12 +114,12 @@ namespace g2x {
 		}
 
 		template<typename T>
-		[[nodiscard]] auto create_vertex_label_container(T value = {}) const {
+		[[nodiscard]] auto create_vertex_labeling(T value = {}) const {
 			return std::vector<T>(num_vertices(), value);
 		}
 
 		template<typename T>
-		[[nodiscard]] auto create_edge_label_container(T value = {}) const {
+		[[nodiscard]] auto create_edge_labeling(T value = {}) const {
 			return std::vector<T>(num_edges(), value);
 		}
 	};

@@ -669,8 +669,8 @@ struct GraphGrid: public Entity {
 		g2x::static_simple_graph graph {numVertices, ctorEdges};
 
 
-		auto nodes = g2x::create_vertex_label_container(graph, (GraphNode*)nullptr);
-		auto edges = g2x::create_edge_label_container(graph, (GraphEdge*)nullptr);
+		auto nodes = g2x::create_vertex_labeling(graph, (GraphNode*)nullptr);
+		auto edges = g2x::create_edge_labeling(graph, (GraphEdge*)nullptr);
 
 		for(const auto& v: g2x::all_vertices(graph)) {
 			nodes[v] = nodeMap[v];
@@ -690,7 +690,7 @@ struct GraphGrid: public Entity {
 		const auto& [graph, nodeMap, edgeMap] = get_graph();
 		if(g2x::num_vertices(graph) == 0) return;
 
-		auto distances = g2x::create_vertex_label_container(graph, -1);
+		auto distances = g2x::create_vertex_labeling(graph, -1);
 
 		for(const auto& [u, v, i]: g2x::algo::simple_edges_bfs(graph, 0)) {
 			if(distances[u] == -1) {
@@ -712,7 +712,7 @@ struct GraphGrid: public Entity {
 		const auto& [graph, nodeMap, edgeMap] = get_graph();
 		if(g2x::num_vertices(graph) == 0) return;
 
-		auto sources = g2x::create_vertex_label_container(graph, -1);
+		auto sources = g2x::create_vertex_labeling(graph, -1);
 		for(const auto& [u, v, i]: g2x::algo::simple_edges_dfs(graph, 0)) {
 			sources[v] = u;
 		}

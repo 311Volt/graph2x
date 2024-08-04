@@ -146,8 +146,8 @@ namespace g2x {
 			)
 				: graph_(graph),
 				  search_structure_(),
-				  state_container_(create_vertex_label_container(graph, vertex_search_state::unvisited)),
-				  source_edge_container_(create_vertex_label_container<edge_opt>(graph)),
+				  state_container_(create_vertex_labeling(graph, vertex_search_state::unvisited)),
+				  source_edge_container_(create_vertex_labeling<edge_opt>(graph)),
 				  edge_predicate_(std::forward<EdgePredicateRefT>(edge_predicate)),
 				  vertex_predicate_(std::forward<VertexPredicateRefT>(vertex_predicate)),
 				  adjacency_projection_(std::forward<AdjacencyProjectionRefT>(adjacency_projection))
@@ -201,13 +201,13 @@ namespace g2x {
 
 			void update_distances(
 				const vertex_id_type& vtx,
-				vertex_label_container_of<GraphT, int> auto&& vtx_label_container
+				vertex_labeling_of<GraphT, int> auto&& vtx_labeling
 			) {
 				if(auto opt_edge = source_edge(vtx)) {
 					const auto& [u, v, i] = *opt_edge;
-					vtx_label_container[v] = vtx_label_container[u] + 1;
+					vtx_labeling[v] = vtx_labeling[u] + 1;
 				} else {
-					vtx_label_container[vtx] = 0;
+					vtx_labeling[vtx] = 0;
 				}
 			}
 			
@@ -254,8 +254,8 @@ namespace g2x {
 		private:
 			
 			using edge_opt = std::optional<edge_type>;
-			using edge_container_type = decltype(create_vertex_label_container<edge_opt, GraphT>(std::declval<GraphT>()));
-			using state_container_type = decltype(create_vertex_label_container<vertex_search_state, GraphT>(std::declval<GraphT>()));
+			using edge_container_type = decltype(create_vertex_labeling<edge_opt, GraphT>(std::declval<GraphT>()));
+			using state_container_type = decltype(create_vertex_labeling<vertex_search_state, GraphT>(std::declval<GraphT>()));
 
 			using edge_predicate_type = std::remove_cvref_t<EdgePredicateRefT>;
 			using vertex_predicate_type = std::remove_cvref_t<VertexPredicateRefT>;
