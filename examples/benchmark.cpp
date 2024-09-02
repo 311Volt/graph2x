@@ -20,7 +20,7 @@ double bfs_benchmark(int numVertices, int numEdges) {
 		}
 	}
 
-	g2x::static_simple_graph graph(numVertices, edges);
+	g2x::basic_graph graph(numVertices, edges);
 
 	auto t0 = std::chrono::high_resolution_clock::now();
 
@@ -47,7 +47,7 @@ double match_benchmark_sample(int numPartitionVertices, float avg_neigh) {
 
 	auto t0 = std::chrono::high_resolution_clock::now();
 
-	auto matching = g2x::algo::new_max_bipartite_matching(graph);
+	auto matching = g2x::algo::max_bipartite_matching(graph);
 	auto t1 = std::chrono::high_resolution_clock::now();
 
 	return std::chrono::duration_cast<std::chrono::duration<double>>(t1 - t0).count();
@@ -71,6 +71,16 @@ int main() {
 	// }
 	// return 0;
 
+	std::binomial_distribution dist(1, 0.1);
+	std::mt19937_64 gen{std::random_device{}()};
+	auto t0 = std::chrono::high_resolution_clock::now();
+	int k=0;
+	for(int i=0; i<10000000; i++) {
+		k += 100 / (1 + dist(gen));
+	}
+	auto t1 = std::chrono::high_resolution_clock::now();
+	std::println("{} t={} ms", k, std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(t1 - t0).count());
+
 	printf("bfs %d,%d: %.6f\n", 50000, 25000, bfs_benchmark(50000, 25000));
 	printf("bfs %d,%d: %.6f\n", 50000, 200000, bfs_benchmark(50000, 200000));
 	printf("bfs %d,%d: %.6f\n", 2000000, 1000000, bfs_benchmark(2000000, 1000000));
@@ -82,6 +92,7 @@ int main() {
 			printf("match V=%d, E=%d: %.2f ms\n", pV, int(pV*avgDeg), 1000.0 * match_benchmark(pV, avgDeg));
 		}
 	}
+
 
 	// printf("match V=%d, E=%d: %.2f ms\n", 1000, 1000*1, 1000.0 * match_benchmark(1000, 1));
 	// printf("match V=%d, E=%d: %.2f ms\n", 1000, 1000*2, 1000.0 * match_benchmark(1000, 2));

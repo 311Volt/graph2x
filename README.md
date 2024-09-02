@@ -1,6 +1,6 @@
 # graph2x
 
-A general-purpose C++23 graph library. Its aim is to leverage modern C++ features to provide an easy-to-use library that covers common use-cases.
+A general-purpose C++23 graph library that aims to let the programmer think about graphs in a pure, abstract way while still allowing for performant code.
 
 This library is **work-in-progress**. Most graph types and algorithms that were planned for this library are currently missing.
 

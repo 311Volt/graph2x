@@ -18,7 +18,7 @@ namespace g2x {
 	 * Edge index lookup: O(1)
 	 */
 
-	class static_simple_digraph {
+	class basic_digraph {
 	private:
 		using vertex_id_type = int;
 		using edge_id_type = int;
@@ -38,7 +38,7 @@ namespace g2x {
 		}
 
 	public:
-		static_simple_digraph(int num_vertices, std::ranges::range auto&& edges) {
+		basic_digraph(int num_vertices, std::ranges::range auto&& edges) {
 			this->num_vertices_ = num_vertices;
 
 			std::vector<std::pair<vertex_id_type, vertex_id_type>> edge_set;

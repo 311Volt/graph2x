@@ -643,7 +643,7 @@ struct GraphGrid: public Entity {
 	}
 
 	struct LabeledGraph {
-		g2x::static_simple_graph graph;
+		g2x::basic_graph graph;
 		std::vector<GraphNode*> nodeMap;
 		std::vector<GraphEdge*> edgeMap;
 	};
@@ -666,7 +666,7 @@ struct GraphGrid: public Entity {
 			int v = hVtx.get().label;
 			nodeMap[v] = &hVtx.get();
 		}
-		g2x::static_simple_graph graph {numVertices, ctorEdges};
+		g2x::basic_graph graph {numVertices, ctorEdges};
 
 
 		auto nodes = g2x::create_vertex_labeling(graph, (GraphNode*)nullptr);

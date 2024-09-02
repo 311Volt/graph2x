@@ -34,7 +34,7 @@ void print_header(const std::string& text) {
 void hk73_test_avg_deg_vs_num_iters(int v, float avg_deg_min, float avg_deg_max, float avg_deg_step) {
 	int samples_per_point = 30;
 
-	g2x::static_simple_graph graph(0, std::vector<std::pair<int,int>>{});
+	g2x::basic_graph graph(0, std::vector<std::pair<int,int>>{});
 	print_header("TEST #1");
 	std::println("V,E,AvgDeg,NumIters,TimeMs");
 
@@ -65,7 +65,7 @@ void hk73_test_slowest_avg_deg(int v_min, int v_max, int v_step) {
 
 	auto di2avgdeg = [](int di)->float{return 2.5 + 0.01*di;};
 	int samples_per_point = 10;
-	g2x::static_simple_graph graph(0, std::vector<std::pair<int,int>>{});
+	g2x::basic_graph graph(0, std::vector<std::pair<int,int>>{});
 	for(int v=v_min; v<=v_max; v+=v_step) {
 		std::array<double, 100> num_iters{};
 

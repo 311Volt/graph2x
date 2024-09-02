@@ -7,7 +7,7 @@
 namespace g2x {
 
 
-	class dynamic_graph {
+	class dense_graph {
 	private:
 
 

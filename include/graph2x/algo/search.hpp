@@ -4,6 +4,8 @@
 
 #include <vector>
 #include "../core.hpp"
+#include "../util.hpp"
+#include <ranges>
 
 namespace g2x {
 	

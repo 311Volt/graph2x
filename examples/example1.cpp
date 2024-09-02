@@ -2,14 +2,14 @@
 #include <graph2x.hpp>
 
 int main() {
-	g2x::static_simple_graph graph(6, std::vector<std::pair<int, int>>{
+	g2x::basic_graph graph(6, std::vector<std::pair<int, int>>{
 		{0, 2},		{0, 4},		{0, 5},
 		{1, 4},		{1, 5},
 		{2, 3},		{2, 4},
 		{4, 5}
 	});
 
-	auto distances = g2x::create_vertex_labeling(graph, -1);
+	auto distances = g2x::create_vertex_labeling<int>(graph, -1);
 	distances[0] = 0;
 
 	for(const auto& [u, v, i]: g2x::algo::simple_edges_bfs(graph, 0)) {
@@ -22,7 +22,7 @@ int main() {
 	}
 
 	// https://d3i71xaburhd42.cloudfront.net/8e1a91c72f61515a28b77e0bc443350bbbe00cb1/3-Figure3-1.png
-	g2x::static_simple_graph ex_bip_graph(11, std::vector<std::pair<int,int>>{
+	g2x::basic_graph ex_bip_graph(11, std::vector<std::pair<int,int>>{
 		{0, 5},
 		{0, 6},
 		{1, 5},

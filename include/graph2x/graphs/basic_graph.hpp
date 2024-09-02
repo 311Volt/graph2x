@@ -24,13 +24,17 @@ namespace g2x {
 	 * Edge index lookup: O(1)
 	 */
 
-	class static_simple_graph {
+	class basic_graph {
 	public:
 		using vertex_id_type = int;
 		using edge_id_type = int;
 
 		using edge_value_type = edge_value<vertex_id_type, edge_id_type>;
 		using edge_view_type = edge_view<vertex_id_type, edge_id_type>;
+
+		static constexpr bool is_undirected = true;
+		static constexpr bool natural_vertex_numbering = true;
+		static constexpr bool natural_edge_numbering = true;
 	private:
 		int num_vertices_;
 
@@ -48,7 +52,7 @@ namespace g2x {
 	
 	public:
 		
-		static_simple_graph(int num_vertices, std::ranges::forward_range auto&& edges) {
+		basic_graph(int num_vertices, std::ranges::forward_range auto&& edges) {
 			this->num_vertices_ = num_vertices;
 
 			int num_edges = 0;
@@ -112,16 +116,16 @@ namespace g2x {
 			return std::span{edge_storage.data() + beg, edge_storage.data() + end};
 		}
 		
-		[[nodiscard]] bool is_adjacent(int u, int v) const {
-			static constexpr auto edge_relation = [](const edge_value_type& e1, const edge_value_type& e2) {
-				return std::make_tuple(e1.u, e1.v) < std::make_tuple(e2.u, e2.v);
-			};
-			return std::ranges::binary_search(outgoing_edges(u), edge_value_type{u, v, 0}, edge_relation);
-		}
+		// [[nodiscard]] bool is_adjacent(int u, int v) const {
+		// 	static constexpr auto edge_relation = [](const edge_value_type& e1, const edge_value_type& e2) {
+		// 		return std::make_tuple(e1.u, e1.v) < std::make_tuple(e2.u, e2.v);
+		// 	};
+		// 	return std::ranges::binary_search(outgoing_edges(u), edge_value_type{u, v, 0}, edge_relation);
+		// }
 
-		[[nodiscard]] auto adjacent_vertices(int u) const {
-			return outgoing_edges(u) | std::views::transform([](const edge_value_type& e){return e.v;});
-		}
+		// [[nodiscard]] auto adjacent_vertices(int u) const {
+		// 	return outgoing_edges(u) | std::views::transform([](const edge_value_type& e){return e.v;});
+		// }
 
 		[[nodiscard]] auto edge_at(int index) const {
 			return edge_storage[offset_of_edge[index]];
@@ -135,17 +139,17 @@ namespace g2x {
 			return edge_storage | std::views::filter([](const edge_value_type& e){return e.u < e.v;});
 		}
 		
-		template<typename T>
-		[[nodiscard]] auto create_vertex_labeling(T value = {}) const {
-			return std::vector<T>(num_vertices(), value);
-		}
-		
-		template<typename T>
-		[[nodiscard]] auto create_edge_labeling(T value = {}) const {
-			return std::vector<T>(num_edges(), value);
-		}
+		// template<typename T>
+		// [[nodiscard]] auto create_vertex_labeling(T value = {}) const {
+		// 	return std::vector<T>(num_vertices(), value);
+		// }
+		//
+		// template<typename T>
+		// [[nodiscard]] auto create_edge_labeling(T value = {}) const {
+		// 	return std::vector<T>(num_edges(), value);
+		// }
 	};
-	static_assert(graph<static_simple_graph>);
+	static_assert(graph<basic_graph>);
 	
 }
 
