@@ -4,6 +4,9 @@
 
 #include "../core.hpp"
 
+#include <unordered_map>
+#include <unordered_set>
+
 namespace g2x {
 
 	/*
@@ -18,10 +21,11 @@ namespace g2x {
 	 * Edge index lookup:
 	 */
 
-	class dynamic_graph {
+	template<typename VIdxT, typename EIdxT, bool IsDirected = false>
+	class general_dynamic_graph {
 	private:
 
-		
+		std::unordered_map<VIdxT, std::unordered_set<VIdxT>> nodes;
 
 	public:
 

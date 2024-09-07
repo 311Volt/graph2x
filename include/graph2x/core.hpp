@@ -12,26 +12,29 @@
 #include <vector>
 
 namespace g2x {
-	
 	namespace detail {
 		
 		template<typename T>
 		using cref_or_integral_value = std::conditional_t<std::is_integral_v<std::remove_cvref_t<T>>, T, const T&>;
-		
-	}
-	
-	template<typename GraphRefT>
-	using vertex_id_t = typename std::remove_cvref_t<GraphRefT>::vertex_id_type;
-	
-	template<typename GraphRefT>
-	using edge_id_t = typename std::remove_cvref_t<GraphRefT>::edge_id_type;
 
-	template<typename VtxIdT, typename EdgeIdT>
-	struct edge_view {
-		detail::cref_or_integral_value<VtxIdT> u;
-		detail::cref_or_integral_value<VtxIdT> v;
-		detail::cref_or_integral_value<EdgeIdT> i;
-	};
+
+		inline void hash_combine(std::size_t& seed) { }
+
+		template <typename T, typename... Rest>
+		inline void hash_combine(std::size_t& seed, const T& v, const Rest&... rest) {
+			std::hash<T> hasher;
+			seed ^= hasher(v) + 0x9e3779b9 + (seed<<6) + (seed>>2);
+			hash_combine(seed, rest...);
+		}
+
+		template<typename... Ts>
+		inline std::size_t combined_hash(const Ts&... vs) {
+			std::size_t seed = 0;
+			hash_combine(seed, vs...);
+			return seed;
+		}
+	}
+
 
 	template<typename VtxIdT, typename EdgeIdT>
 	struct edge_value {
@@ -39,10 +42,99 @@ namespace g2x {
 		VtxIdT v;
 		EdgeIdT i;
 
-		explicit operator edge_view<VtxIdT, EdgeIdT>() const {
-			return {u, v, i};
+		using vertex_id_type = VtxIdT;
+		using edge_id_type = EdgeIdT;
+
+		template<int i>
+		auto get(this auto&& self) {
+			if constexpr (i == 0) {
+				return self.u;
+			} else if constexpr (i == 1) {
+				return self.v;
+			} else if constexpr (i == 2) {
+				return self.i;
+			}
+		}
+
+		friend auto operator<=>(const edge_value& a, const edge_value& b) {
+			return std::tuple {a.u, a.v, a.i} <=> std::tuple {b.u, b.v, b.i};
+		}
+
+
+	};
+
+	template<typename VtxIdT>
+	struct simplified_edge_value {
+		VtxIdT u;
+		VtxIdT v;
+
+		using vertex_id_type = VtxIdT;
+		using edge_id_type = std::pair<VtxIdT, VtxIdT>;
+
+		template<int i>
+		auto get(this auto&& self) {
+			if constexpr (i == 0) {
+				return self.u;
+			} else if constexpr (i == 1) {
+				return self.v;
+			} else if constexpr (i == 2) {
+				return std::pair {self.u, self.v};
+			}
+		}
+
+		[[nodiscard]] friend auto operator<=>(const simplified_edge_value& a, const simplified_edge_value& b) {
+			return std::tuple{a.u, a.v} <=> std::tuple{b.u, b.v};
 		}
 	};
+
+	// template<int N, typename VtxIdT, typename EdgeIdT>
+	// auto&& get(const edge_value<VtxIdT, EdgeIdT>& e) {
+	// 	return e.template get<N>();
+	// }
+	// template<int N, typename VtxIdT>
+	// auto&& get(const simplified_edge_value<VtxIdT>& e) {
+	// 	return e.template get<N>();
+	// }
+}
+
+template<typename VtxIdT, typename EdgeIdT>
+struct std::tuple_size<g2x::edge_value<VtxIdT, EdgeIdT>> {
+	static constexpr size_t value = 3;
+};
+
+template<typename VtxIdT>
+struct std::tuple_size<g2x::simplified_edge_value<VtxIdT>> {
+	static constexpr size_t value = 3;
+};
+
+template<std::size_t N, typename VtxIdT, typename EdgeIdT>
+struct std::tuple_element<N, g2x::edge_value<VtxIdT, EdgeIdT>> {
+	using type = std::remove_cvref_t<decltype(std::declval<g2x::edge_value<VtxIdT, EdgeIdT>>().template get<N>())>;
+};
+
+template<std::size_t N, typename VtxIdT>
+struct std::tuple_element<N, g2x::simplified_edge_value<VtxIdT>> {
+	using type = std::remove_cvref_t<decltype(std::declval<g2x::simplified_edge_value<VtxIdT>>().template get<N>())>;
+};
+
+
+template<typename VtxIdT, typename EdgeIdT>
+struct std::hash<g2x::edge_value<VtxIdT, EdgeIdT>> {
+	static size_t operator()(const g2x::edge_value<VtxIdT, EdgeIdT>& e) {
+		return g2x::detail::combined_hash(e.u, e.v, e.i);
+	}
+};
+
+template<typename VtxIdT>
+struct std::hash<g2x::simplified_edge_value<VtxIdT>> {
+	static size_t operator()(const g2x::simplified_edge_value<VtxIdT>& e) {
+		return g2x::detail::combined_hash(e.u, e.v);
+	}
+};
+
+
+
+namespace g2x {
 
 	namespace graph_traits {
 		template<typename GraphT>
@@ -68,9 +160,14 @@ namespace g2x {
 	}
 
 
+	template<typename GraphRefT>
+	using edge_t = typename std::remove_cvref_t<GraphRefT>::edge_value_type;
 
 	template<typename GraphRefT>
-	using edge_t = edge_value<vertex_id_t<GraphRefT>, edge_id_t<GraphRefT>>;
+	using vertex_id_t = typename edge_t<GraphRefT>::vertex_id_type;
+
+	template<typename GraphRefT>
+	using edge_id_t = typename edge_t<GraphRefT>::edge_id_type;
 
 	/*
 	 * Returns the range consisting of all vertices in the graph.
@@ -344,6 +441,13 @@ namespace g2x {
 		
 	}
 
+	template<typename T>
+	concept edge = requires(T e) {
+		requires std::tuple_size_v<T> == 3;
+		{std::get<0>(e)} -> std::same_as<typename T::vertex_id_type>;
+		{std::get<1>(e)} -> std::same_as<typename T::vertex_id_type>;
+		{std::get<2>(e)} -> std::same_as<typename T::edge_id_type>;
+	};
 
 
 	template<typename T, typename GraphRefT>
@@ -398,6 +502,12 @@ namespace g2x {
 
 	// this exists because std::vector<bool>
 	using boolean = char;
+
+	using isize = std::ptrdiff_t;
+	using usize = std::size_t;
+
+	using vertex_count = std::optional<int>;
+	inline constexpr vertex_count auto_num_vertices = std::nullopt;
 
 }
 

@@ -13,7 +13,7 @@
 namespace g2x {
 	
 	/*
-	 * An immutable, undirected, simple graph.
+	 * An immutable graph.
 	 *
 	 * Creation: O(V + E*log(E))
 	 * Adjacency check: O(log(N(v)))
@@ -24,53 +24,66 @@ namespace g2x {
 	 * Edge index lookup: O(1)
 	 */
 
-	class basic_graph {
+	template<std::integral VIdxT, std::integral EIdxT = int, bool IsDirected = false>
+	class general_basic_graph {
 	public:
-		using vertex_id_type = int;
-		using edge_id_type = int;
-
+		using vertex_id_type = VIdxT;
+		using edge_id_type = EIdxT;
+		using edge_offset_type = edge_id_type;
 		using edge_value_type = edge_value<vertex_id_type, edge_id_type>;
-		using edge_view_type = edge_view<vertex_id_type, edge_id_type>;
 
-		static constexpr bool is_undirected = true;
+		static constexpr bool is_directed = IsDirected;
 		static constexpr bool natural_vertex_numbering = true;
 		static constexpr bool natural_edge_numbering = true;
 	private:
-		int num_vertices_;
+		isize num_vertices_;
 
 		std::vector<edge_value_type> edge_storage;
 
 		//the i-th and i+1-th elements denote the index range of adjacency_storage
-		std::vector<int> adjacency_regions;
+		std::vector<edge_offset_type> adjacency_regions;
 
 		//i-th element is the index into edge_index_storage to one of the two edges that satisfy i==idx
-		std::vector<int> offset_of_edge;
+		std::vector<edge_offset_type> offset_of_edge;
 
-		[[nodiscard]] std::pair<int, int> get_adjacency_range(int v) const {
+		[[nodiscard]] std::pair<edge_offset_type, edge_offset_type> get_adjacency_range(vertex_id_type v) const {
 			return {adjacency_regions.at(v), adjacency_regions.at(v+1)};
+		}
+
+		[[nodiscard]] bool is_edge_unique(const edge_value_type& e) const {
+			if constexpr(is_directed) {
+				return true;
+			}
+			return e.u <= e.v;
 		}
 	
 	public:
 		
-		basic_graph(int num_vertices, std::ranges::forward_range auto&& edges) {
-			this->num_vertices_ = num_vertices;
+		general_basic_graph(vertex_count num_vertices, std::ranges::forward_range auto&& edges) {
 
-			int num_edges = 0;
+			isize counted_num_vertices = 0;
+
+			edge_id_type num_edges = 0;
 
 			if constexpr(std::ranges::sized_range<std::remove_cvref_t<decltype(edges)>>) {
 				edge_storage.reserve(std::ranges::size(edges));
 			}
 
 			for(const auto& [vtx1, vtx2]: edges) {
-				if(vtx1 == vtx2) {
-					throw std::runtime_error("Loops are not allowed");
-				}
-				if(vtx1 < 0 || vtx2 < 0 || vtx1 >= num_vertices_ || vtx2 >= num_vertices_) {
-					throw std::runtime_error("vertex indices out of range");
+				if(num_edges == std::numeric_limits<decltype(num_edges)>::max()) {
+					throw std::out_of_range(std::format("Limit of {} edges exceeded", num_edges));
 				}
 
+				if(vtx1 < 0 || vtx2 < 0 || vtx1 >= num_vertices_ || vtx2 >= num_vertices_) {
+					throw std::out_of_range("vertex indices out of range");
+				}
+
+				counted_num_vertices = std::max(counted_num_vertices, vtx1, vtx2);
+
 				edge_storage.push_back({vtx1, vtx2, num_edges});
-				edge_storage.push_back({vtx2, vtx1, num_edges});
+				if(not IsDirected && vtx1 != vtx2) {
+					edge_storage.push_back({vtx2, vtx1, num_edges});
+				}
 				++num_edges;
 			}
 			std::sort(edge_storage.begin(), edge_storage.end(), [](auto&& e1, auto&& e2) {
@@ -79,17 +92,22 @@ namespace g2x {
 				return std::make_tuple(u1, v1, i1) < std::make_tuple(u2, v2, i2);
 			});
 
+			this->num_vertices_ = num_vertices.value_or(counted_num_vertices);
 
 			offset_of_edge.resize(num_edges);
-			for(int i=edge_storage.size()-1; i>=0; i--) {
+			for(isize i=edge_storage.size()-1; i>=0; i--) {
 				offset_of_edge[edge_storage[i].i] = i;
+			}
+
+			if(this->num_vertices_ >= std::numeric_limits<vertex_id_type>::max()) {
+				throw std::out_of_range(std::format("Cannot create adjacency regions: limit of {} vertices exceeded", num_vertices_-1));
 			}
 			
 
 			adjacency_regions.resize(this->num_vertices_ + 1);
 			adjacency_regions.front() = 0;
 			adjacency_regions.back() = edge_storage.size();
-			for(int v=0; v<num_vertices_; v++) {
+			for(isize v=0; v<num_vertices_; v++) {
 				if(v > 0) {
 					adjacency_regions[v] = adjacency_regions[v-1];
 				}
@@ -102,32 +120,21 @@ namespace g2x {
 			
 		}
 		
-		[[nodiscard]] int num_vertices() const {
+		[[nodiscard]] isize num_vertices() const {
 			return num_vertices_;
 		}
 		
-		[[nodiscard]] int num_edges() const {
+		[[nodiscard]] isize num_edges() const {
 			return offset_of_edge.size();
 		}
 
-		[[nodiscard]] auto outgoing_edges(int u) const {
+		[[nodiscard]] auto outgoing_edges(vertex_id_type u) const {
 			auto [beg, end] = get_adjacency_range(u);
 
 			return std::span{edge_storage.data() + beg, edge_storage.data() + end};
 		}
-		
-		// [[nodiscard]] bool is_adjacent(int u, int v) const {
-		// 	static constexpr auto edge_relation = [](const edge_value_type& e1, const edge_value_type& e2) {
-		// 		return std::make_tuple(e1.u, e1.v) < std::make_tuple(e2.u, e2.v);
-		// 	};
-		// 	return std::ranges::binary_search(outgoing_edges(u), edge_value_type{u, v, 0}, edge_relation);
-		// }
 
-		// [[nodiscard]] auto adjacent_vertices(int u) const {
-		// 	return outgoing_edges(u) | std::views::transform([](const edge_value_type& e){return e.v;});
-		// }
-
-		[[nodiscard]] auto edge_at(int index) const {
+		[[nodiscard]] auto edge_at(edge_id_type index) const {
 			return edge_storage[offset_of_edge[index]];
 		}
 
@@ -136,19 +143,22 @@ namespace g2x {
 		}
 		
 		[[nodiscard]] auto all_edges() const {
-			return edge_storage | std::views::filter([](const edge_value_type& e){return e.u < e.v;});
+			return edge_storage | std::views::filter([this](const edge_value_type& e){return is_edge_unique(e);});
 		}
-		
-		// template<typename T>
-		// [[nodiscard]] auto create_vertex_labeling(T value = {}) const {
-		// 	return std::vector<T>(num_vertices(), value);
-		// }
-		//
-		// template<typename T>
-		// [[nodiscard]] auto create_edge_labeling(T value = {}) const {
-		// 	return std::vector<T>(num_edges(), value);
-		// }
+
 	};
+
+	template<typename VIdxT, typename EIdxT = int>
+	using general_basic_digraph = general_basic_graph<VIdxT, EIdxT, true>;
+
+	using basic_graph = general_basic_graph<int>;
+	using basic_graph_16 = general_basic_graph<int16_t>;
+	using basic_graph_8 = general_basic_graph<int8_t>;
+
+	using basic_digraph = general_basic_digraph<int>;
+	using basic_digraph_16 = general_basic_digraph<int16_t>;
+	using basic_digraph_8 = general_basic_digraph<int8_t>;
+
 	static_assert(graph<basic_graph>);
 	
 }
