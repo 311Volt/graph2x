@@ -30,7 +30,7 @@ namespace g2x {
 		using vertex_id_type = VIdxT;
 		using edge_id_type = EIdxT;
 		using edge_offset_type = edge_id_type;
-		using edge_value_type = edge_value<vertex_id_type, edge_id_type>;
+		using edge_value_type = edge_value<vertex_id_type, edge_id_type, IsDirected>;
 
 		static constexpr bool is_directed = IsDirected;
 		static constexpr bool allows_loops = true;

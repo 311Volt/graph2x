@@ -34,7 +34,7 @@ namespace g2x {
 		static constexpr bool has_natural_edge_numbering = false;
 		static constexpr bool outgoing_edges_uv_sorted = false;
 
-		using edge_value_type = edge_value<VIdxT, EIdxT>;
+		using edge_value_type = edge_value<VIdxT, EIdxT, IsDirected>;
 		using vertex_id_type = typename edge_value_type::vertex_id_type;
 		using edge_id_type = typename edge_value_type::edge_id_type;
 

@@ -7,8 +7,8 @@
 #include <map>
 #include <ranges>
 #include <unordered_map>
-#include <unordered_set>
 #include <algorithm>
+#include <functional>
 #include <vector>
 
 namespace g2x {
@@ -33,15 +33,25 @@ namespace g2x {
 			hash_combine(seed, vs...);
 			return seed;
 		}
+
+		template<typename T>
+		auto make_sorted_pair(const T& a, const T& b) -> std::pair<T, T> {
+			if(a > b) {
+				return {b, a};
+			} else {
+				return {a, b};
+			}
+		}
 	}
 
 
-	template<typename VtxIdT, typename EdgeIdT>
+	template<typename VtxIdT, typename EdgeIdT, bool IsDirected = true>
 	struct edge_value {
 		VtxIdT u;
 		VtxIdT v;
 		EdgeIdT i;
 
+		using g2x_edge_value = void;
 		using vertex_id_type = VtxIdT;
 		using edge_id_type = EdgeIdT;
 
@@ -56,18 +66,32 @@ namespace g2x {
 			}
 		}
 
+		[[nodiscard]] auto normalized_tuple() const {
+			if constexpr (IsDirected) {
+				return std::tuple {u, v, i};
+			} else {
+				if(u > v) return std::tuple{v, u, i};
+				else return std::tuple{u, v, i};
+			}
+		}
+
 		friend auto operator<=>(const edge_value& a, const edge_value& b) {
-			return std::tuple {a.u, a.v, a.i} <=> std::tuple {b.u, b.v, b.i};
+			return a.normalized_tuple() <=> b.normalized_tuple();
+		}
+
+		friend bool operator==(const edge_value& a, const edge_value& b) {
+			return a.normalized_tuple() == b.normalized_tuple();
 		}
 
 
 	};
 
-	template<typename VtxIdT>
+	template<typename VtxIdT, bool IsDirected = true>
 	struct simplified_edge_value {
 		VtxIdT u;
 		VtxIdT v;
 
+		using g2x_simplified_edge_value = void;
 		using vertex_id_type = VtxIdT;
 		using edge_id_type = std::pair<VtxIdT, VtxIdT>;
 
@@ -78,57 +102,61 @@ namespace g2x {
 			} else if constexpr (i == 1) {
 				return self.v;
 			} else if constexpr (i == 2) {
-				return std::pair {self.u, self.v};
+				return self.normalized_pair();
+			}
+		}
+
+		[[nodiscard]] auto normalized_pair() const {
+			if constexpr (IsDirected) {
+				return std::pair{u, v};
+			} else {
+				return detail::make_sorted_pair(u, v);
 			}
 		}
 
 		[[nodiscard]] friend auto operator<=>(const simplified_edge_value& a, const simplified_edge_value& b) {
-			return std::tuple{a.u, a.v} <=> std::tuple{b.u, b.v};
+			return a.normalized_pair() <=> b.normalized_pair();
+		}
+
+		friend bool operator==(const simplified_edge_value& a, const simplified_edge_value& b) {
+			return a.normalized_pair() == b.normalized_pair();
 		}
 	};
-
-	// template<int N, typename VtxIdT, typename EdgeIdT>
-	// auto&& get(const edge_value<VtxIdT, EdgeIdT>& e) {
-	// 	return e.template get<N>();
-	// }
-	// template<int N, typename VtxIdT>
-	// auto&& get(const simplified_edge_value<VtxIdT>& e) {
-	// 	return e.template get<N>();
-	// }
 }
 
-template<typename VtxIdT, typename EdgeIdT>
-struct std::tuple_size<g2x::edge_value<VtxIdT, EdgeIdT>> {
+template<typename VtxIdT, typename EdgeIdT, bool IsDirected>
+struct std::tuple_size<g2x::edge_value<VtxIdT, EdgeIdT, IsDirected>> {
 	static constexpr size_t value = 3;
 };
 
-template<typename VtxIdT>
-struct std::tuple_size<g2x::simplified_edge_value<VtxIdT>> {
+template<typename VtxIdT, bool IsDirected>
+struct std::tuple_size<g2x::simplified_edge_value<VtxIdT, IsDirected>> {
 	static constexpr size_t value = 3;
 };
 
-template<std::size_t N, typename VtxIdT, typename EdgeIdT>
-struct std::tuple_element<N, g2x::edge_value<VtxIdT, EdgeIdT>> {
+template<std::size_t N, typename VtxIdT, typename EdgeIdT, bool IsDirected>
+struct std::tuple_element<N, g2x::edge_value<VtxIdT, EdgeIdT, IsDirected>> {
 	using type = std::remove_cvref_t<decltype(std::declval<g2x::edge_value<VtxIdT, EdgeIdT>>().template get<N>())>;
 };
 
-template<std::size_t N, typename VtxIdT>
-struct std::tuple_element<N, g2x::simplified_edge_value<VtxIdT>> {
+template<std::size_t N, typename VtxIdT, bool IsDirected>
+struct std::tuple_element<N, g2x::simplified_edge_value<VtxIdT, IsDirected>> {
 	using type = std::remove_cvref_t<decltype(std::declval<g2x::simplified_edge_value<VtxIdT>>().template get<N>())>;
 };
 
 
-template<typename VtxIdT, typename EdgeIdT>
-struct std::hash<g2x::edge_value<VtxIdT, EdgeIdT>> {
-	static size_t operator()(const g2x::edge_value<VtxIdT, EdgeIdT>& e) {
-		return g2x::detail::combined_hash(e.u, e.v, e.i);
+template<typename VtxIdT, typename EdgeIdT, bool IsDirected>
+struct std::hash<g2x::edge_value<VtxIdT, EdgeIdT, IsDirected>> {
+	static size_t operator()(const g2x::edge_value<VtxIdT, EdgeIdT, IsDirected>& e) {
+		return std::apply([](auto&&... vs){return g2x::detail::combined_hash(vs...);}, e.normalized_tuple());
 	}
 };
 
-template<typename VtxIdT>
-struct std::hash<g2x::simplified_edge_value<VtxIdT>> {
-	static size_t operator()(const g2x::simplified_edge_value<VtxIdT>& e) {
-		return g2x::detail::combined_hash(e.u, e.v);
+template<typename VtxIdT, bool IsDirected>
+struct std::hash<g2x::simplified_edge_value<VtxIdT, IsDirected>> {
+	static size_t operator()(const g2x::simplified_edge_value<VtxIdT, IsDirected>& e) {
+		auto p = e.normalized_pair();
+		return g2x::detail::combined_hash(p.first, p.second);
 	}
 };
 
@@ -277,9 +305,10 @@ namespace g2x {
 	template<typename GraphRefT>
 	auto edge_at(GraphRefT&& graph, const edge_id_t<GraphRefT>& index) {
 		using vid_t = vertex_id_t<GraphRefT>;
-		if constexpr(std::is_same_v<simplified_edge_value<vid_t>, edge_t<GraphRefT>>) {
+		using ev_t = edge_t<GraphRefT>;
+		if constexpr(requires{typename ev_t::g2x_simplified_edge_value;}) {
 			const auto& [u, v] = index;
-			return simplified_edge_value<vid_t>{u, v};
+			return ev_t{u, v};
 		} else {
 			return graph.edge_at(index);
 		}
