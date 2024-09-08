@@ -74,11 +74,18 @@ namespace g2x {
 					throw std::out_of_range(std::format("Limit of {} edges exceeded", num_edges));
 				}
 
-				if(vtx1 < 0 || vtx2 < 0 || vtx1 >= num_vertices_ || vtx2 >= num_vertices_) {
-					throw std::out_of_range("vertex indices out of range");
+				bool idx_out_of_bound = false;
+				if(vtx1 < 0 || vtx2 < 0) {
+					idx_out_of_bound = true;
+				}
+				if(num_vertices.has_value() && (vtx1 >= num_vertices.value() || vtx2 >= num_vertices.value())) {
+					idx_out_of_bound = true;
+				}
+				if(idx_out_of_bound) {
+					throw std::out_of_range(std::format("vertex indices ({}, {}) out of range: [{}; {})", vtx1, vtx2, 0, num_vertices.value_or(counted_num_vertices)));
 				}
 
-				counted_num_vertices = std::max(counted_num_vertices, vtx1, vtx2);
+				counted_num_vertices = std::max<isize>(counted_num_vertices, std::max(vtx1, vtx2));
 
 				edge_storage.push_back({vtx1, vtx2, num_edges});
 				if(not IsDirected && vtx1 != vtx2) {

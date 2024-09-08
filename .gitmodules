@@ -1,3 +1,6 @@
 [submodule "axxegro"]
 	path = axxegro
 	url = https://github.com/311Volt/axxegro.git
+[submodule "googletest"]
+	path = googletest
+	url = https://github.com/google/googletest

@@ -116,15 +116,15 @@ namespace g2x {
 			return self.access(x, y);
 		}
 
-		auto&& begin(this auto&& self) {
+		auto begin(this auto&& self) {
 			return self.data_.begin();
 		}
 
-		auto&& end(this auto&& self) {
+		auto end(this auto&& self) {
 			return self.data_.end();
 		}
 
-		auto&& data(this auto&& self) {
+		auto data(this auto&& self) {
 			return self.data_.data();
 		}
 

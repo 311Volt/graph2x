@@ -1,5 +1,5 @@
 
-#include <graph2x.hpp>
+#include <../include/graph2x.hpp>
 
 #include <random>
 #include <ranges>

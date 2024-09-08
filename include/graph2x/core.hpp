@@ -159,6 +159,13 @@ namespace g2x {
 		inline constexpr bool natural_edge_numbering<GraphT> = GraphT::natural_edge_numbering;
 	}
 
+	auto&& strip_index(auto&& edge_range) {
+		return edge_range | std::views::transform([&](auto&& edge) {
+			const auto& [u, v, i] = edge;
+			return std::pair {u, v};
+		});;
+	}
+
 
 	template<typename GraphRefT>
 	using edge_t = typename std::remove_cvref_t<GraphRefT>::edge_value_type;
@@ -212,7 +219,13 @@ namespace g2x {
 	 */
 	template<typename GraphRefT>
 	auto edge_at(GraphRefT&& graph, const edge_id_t<GraphRefT>& index) {
-		return graph.edge_at(index);
+		using vid_t = vertex_id_t<GraphRefT>;
+		if constexpr(std::is_same_v<simplified_edge_value<vid_t>, edge_t<GraphRefT>>) {
+			const auto& [u, v] = index;
+			return simplified_edge_value<vid_t>{u, v};
+		} else {
+			return graph.edge_at(index);
+		}
 	}
 
 	/*
@@ -223,7 +236,7 @@ namespace g2x {
 		if constexpr(requires{graph.num_vertices();}) {
 			return graph.num_vertices();
 		} else {
-			return std::ranges::size(all_vertices(graph));
+			return std::ranges::distance(all_vertices(graph));
 		}
 	}
 
@@ -235,7 +248,7 @@ namespace g2x {
 		if constexpr(requires{graph.num_edges();}) {
 			return graph.num_edges();
 		} else {
-			return std::ranges::size(all_edges(graph));
+			return std::ranges::distance(all_edges(graph));
 		}
 	}
 
@@ -263,7 +276,7 @@ namespace g2x {
 		if constexpr (requires{graph.is_adjacent(u, v);}) {
 			return graph.is_adjacent(u, v);
 		} else {
-			auto&& adj_vertices = adjacent_vertices(graph);
+			auto&& adj_vertices = adjacent_vertices(graph, u);
 			static constexpr bool adj_vertices_rar = std::ranges::random_access_range<decltype(adj_vertices)>;
 			if constexpr (adj_vertices_rar && requires{graph.adj_vertex_ordering();}) {
 				return std::ranges::binary_search(adj_vertices, v, graph.adj_vertex_ordering());

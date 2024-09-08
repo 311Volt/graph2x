@@ -1,5 +1,5 @@
 
-#include <graph2x.hpp>
+#include <../include/graph2x.hpp>
 #include <iostream>
 
 auto& g_random = g2x::algo::config::hopcroft_karp.random_generator;
