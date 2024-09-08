@@ -27,6 +27,12 @@ namespace g2x {
 	public:
 
 		static constexpr bool is_directed = IsDirected;
+		static constexpr bool allows_loops = true;
+		static constexpr bool allows_multiple_edges = true;
+
+		static constexpr bool has_natural_vertex_numbering = false;
+		static constexpr bool has_natural_edge_numbering = false;
+		static constexpr bool outgoing_edges_uv_sorted = false;
 
 		using edge_value_type = edge_value<VIdxT, EIdxT>;
 		using vertex_id_type = typename edge_value_type::vertex_id_type;

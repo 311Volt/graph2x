@@ -33,8 +33,13 @@ namespace g2x {
 		using edge_value_type = edge_value<vertex_id_type, edge_id_type>;
 
 		static constexpr bool is_directed = IsDirected;
-		static constexpr bool natural_vertex_numbering = true;
-		static constexpr bool natural_edge_numbering = true;
+		static constexpr bool allows_loops = true;
+		static constexpr bool allows_multiple_edges = true;
+
+		static constexpr bool has_natural_vertex_numbering = true;
+		static constexpr bool has_natural_edge_numbering = true;
+		static constexpr bool outgoing_edges_uv_sorted = true;
+
 	private:
 		isize num_vertices_;
 

@@ -12,8 +12,12 @@ namespace g2x {
 	public:
 
 		static constexpr bool is_directed = IsDirected;
-		static constexpr bool natural_vertex_numbering = true;
-		static constexpr bool natural_edge_numbering = false;
+		static constexpr bool allows_loops = true;
+		static constexpr bool allows_multiple_edges = false;
+
+		static constexpr bool has_natural_vertex_numbering = true;
+		static constexpr bool has_natural_edge_numbering = false;
+		static constexpr bool outgoing_edges_uv_sorted = true;
 
 		using vertex_id_type = VIdxT;
 

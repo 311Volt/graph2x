@@ -137,26 +137,76 @@ struct std::hash<g2x::simplified_edge_value<VtxIdT>> {
 namespace g2x {
 
 	namespace graph_traits {
-		template<typename GraphT>
-		inline constexpr bool is_directed = false;
 
 		template<typename GraphT>
-			requires (requires{GraphT::is_directed;})
-		inline constexpr bool is_directed<GraphT> = GraphT::is_directed;
+		struct is_directed {
+			static constexpr bool value = requires {
+				requires GraphT::is_directed;
+			};
+		};
 
 		template<typename GraphT>
-		inline constexpr bool natural_vertex_numbering = false;
+		inline constexpr bool is_directed_v = is_directed<GraphT>::value;
+
+
 
 		template<typename GraphT>
-			requires (requires{GraphT::natural_vertex_numbering;})
-		inline constexpr bool natural_vertex_numbering<GraphT> = GraphT::natural_vertex_numbering;
+		struct allows_loops {
+			static constexpr bool value = requires {
+				requires GraphT::allows_loops;
+			};
+		};
 
 		template<typename GraphT>
-		inline constexpr bool natural_edge_numbering = false;
+		inline constexpr bool allows_loops_v = allows_loops<GraphT>::value;
+
+
 
 		template<typename GraphT>
-			requires (requires{GraphT::natural_edge_numbering;})
-		inline constexpr bool natural_edge_numbering<GraphT> = GraphT::natural_edge_numbering;
+		struct allows_multiple_edges {
+			static constexpr bool value = requires {
+				requires GraphT::allows_multiple_edges;
+			};
+		};
+
+		template<typename GraphT>
+		inline constexpr bool allows_multiple_edges_v = allows_multiple_edges<GraphT>::value;
+
+
+
+		template<typename GraphT>
+		struct has_natural_vertex_numbering {
+			static constexpr bool value = requires {
+				requires GraphT::has_natural_vertex_numbering;
+			};
+		};
+
+		template<typename GraphT>
+		inline constexpr bool has_natural_vertex_numbering_v = has_natural_vertex_numbering<GraphT>::value;
+
+
+
+		template<typename GraphT>
+		struct has_natural_edge_numbering {
+			static constexpr bool value = requires {
+				requires GraphT::has_natural_edge_numbering;
+			};
+		};
+
+		template<typename GraphT>
+		inline constexpr bool has_natural_edge_numbering_v = has_natural_edge_numbering<GraphT>::value;
+
+
+
+		template<typename GraphT>
+		struct outgoing_edges_uv_sorted {
+			static constexpr bool value = requires {
+				requires GraphT::outgoing_edges_uv_sorted;
+			};
+		};
+
+		template<typename GraphT>
+		inline constexpr bool outgoing_edges_uv_sorted_v = outgoing_edges_uv_sorted<GraphT>::value;
 	}
 
 	auto&& strip_index(auto&& edge_range) {
@@ -177,7 +227,7 @@ namespace g2x {
 	using edge_id_t = typename edge_t<GraphRefT>::edge_id_type;
 
 	/*
-	 * Returns the range consisting of all vertices in the graph.
+	 * Returns the range consisting of all valid vertex IDs for a particular graph.
 	 */
 	template<typename GraphRefT>
 	auto all_vertices(GraphRefT&& graph) {
@@ -185,7 +235,7 @@ namespace g2x {
 	}
 
 	/*
-	 * Returns the range consisting of all edges in the graph, viewed as tuples
+	 * Returns the range consisting of all edges in the graph, viewed as tuple-likes
 	 * [src_vertex, dst_vertex, index].
 	 */
 	template<typename GraphRefT>
@@ -194,9 +244,13 @@ namespace g2x {
 	}
 
 	/*
-	 * Returns a range of all edges that are outgoing from v.
-	 * The first element of each of the returned tuples is guaranteed to
-	 * be equivalent to v.
+	 * Returns a range of all edges that are outgoing from v, viewed as tuple-likes
+	 * [src_vertex, dst_vertex, index].
+	 *
+	 * src_vertex is GUARANTEED to be equivalent to v. That is, if the graph is undirected
+	 * and outgoing_edges(4) is requested, a hypothetical edge (4, 1) will always be rendered
+	 * as [4, 1, i] and not as [1, 4, i] regardless of how it is stored internally. The behavior
+	 * of library functions is undefined if an implementation fails to meet this requirement.
 	 */
 	template<typename GraphRefT>
 	auto outgoing_edges(GraphRefT&& graph, const vertex_id_t<GraphRefT>& v) {
@@ -204,9 +258,12 @@ namespace g2x {
 	}
 
 	/*
-	 * Returns a range of all edges that are incoming to v.
-	 * This is expected to be unimplemented in most cases, but some digraph types
-	 * may provide an implementation.
+	 * Returns a range of all edges that are incoming to v. Similarly to the behavior of
+	 * outgoing_edges, the second element of each tuple-like in the returned range is
+	 * guaranteed to be equivalent to v.
+	 *
+	 * This is expected to be unimplemented in most cases. Only rely on this function's
+	 * availability if fast access to the list of incoming edges is crucial.
 	 */
 	template<typename GraphRefT>
 	auto incoming_edges(GraphRefT&& graph, const vertex_id_t<GraphRefT>& v) {
@@ -273,13 +330,15 @@ namespace g2x {
 	 */
 	template<typename GraphRefT>
 	bool is_adjacent(GraphRefT&& graph, const vertex_id_t<GraphRefT>& u, const vertex_id_t<GraphRefT>& v) {
+		using GraphT = std::remove_cvref_t<GraphRefT>;
 		if constexpr (requires{graph.is_adjacent(u, v);}) {
 			return graph.is_adjacent(u, v);
 		} else {
 			auto&& adj_vertices = adjacent_vertices(graph, u);
 			static constexpr bool adj_vertices_rar = std::ranges::random_access_range<decltype(adj_vertices)>;
-			if constexpr (adj_vertices_rar && requires{graph.adj_vertex_ordering();}) {
-				return std::ranges::binary_search(adj_vertices, v, graph.adj_vertex_ordering());
+			static constexpr bool is_sorted = graph_traits::outgoing_edges_uv_sorted_v<GraphT>;
+			if constexpr (adj_vertices_rar && is_sorted) {
+				return std::ranges::binary_search(adj_vertices, v);
 			} else {
 				return std::ranges::find(adj_vertices, v) != std::ranges::end(adj_vertices);
 			}
@@ -305,6 +364,10 @@ namespace g2x {
 		}
 	}
 
+	/*
+	 * Similar to "degree", but prioritizes the graph type's "outdegree" method
+	 * if both "degree" and "outdegree" are present.
+	 */
 	template<typename GraphRefT>
 	auto outdegree(GraphRefT&& graph, const vertex_id_t<GraphRefT>& v) {
 		if constexpr (requires{graph.outdegree(v);}) {
@@ -316,6 +379,10 @@ namespace g2x {
 		}
 	}
 
+	/*
+	 * Yields the indegree of a vertex in a directed graph. Do not expect this to be available
+	 * in the general case.
+	 */
 	template<typename GraphRefT>
 	auto indegree(GraphRefT&& graph, const vertex_id_t<GraphRefT>& v) {
 		if constexpr (requires{graph.indegree(v);}) {
@@ -337,7 +404,7 @@ namespace g2x {
 	auto create_vertex_labeling(GraphRefT&& graph) {
 		if constexpr (requires{graph.template create_vertex_labeling<T>();}) {
 			return graph.template create_vertex_labeling<T>();
-		} else if constexpr (graph_traits::natural_vertex_numbering<std::remove_cvref_t<GraphRefT>>) {
+		} else if constexpr (graph_traits::has_natural_vertex_numbering_v<std::remove_cvref_t<GraphRefT>>) {
 			return std::vector<T>(num_vertices(graph));
 		} else if constexpr (requires{std::unordered_map<vertex_id_t<GraphRefT>, T>{};}) {
 			return std::unordered_map<vertex_id_t<GraphRefT>, T>{};
@@ -346,6 +413,11 @@ namespace g2x {
 		}
 	}
 
+	/*
+	 * Returns an object 'vl' where for a valid vertex 'v' of a graph 'g'
+	 * the expression 'vl[v]' yields a reference to an object of type T
+	 * owned by 'vl'. The initial value of all such objects is equivalent to "value".
+	 */
 	template<typename T, typename GraphRefT>
 	auto create_vertex_labeling(GraphRefT&& graph, const T& value) {
 		auto labeling = create_vertex_labeling<T>(graph);
@@ -362,13 +434,13 @@ namespace g2x {
 	/*
 	 * Returns an object 'el' where for a valid edge index 'e' of a graph 'g'
 	 * the expression 'el[e]' yields a reference to an object of type T
-	 * owned by 'el'.
+	 * owned by 'el'. The initial value of such objects is not specified.
 	 */
 	template<typename T, typename GraphRefT>
 	auto create_edge_labeling(GraphRefT&& graph) {
 		if constexpr (requires{graph.template create_edge_labeling<T>();}) {
 			return graph.template create_edge_labeling<T>();
-		} else if constexpr (graph_traits::natural_edge_numbering<std::remove_cvref_t<GraphRefT>>) {
+		} else if constexpr (graph_traits::has_natural_edge_numbering_v<std::remove_cvref_t<GraphRefT>>) {
 			return std::vector<T>(num_edges(graph));
 		} else if constexpr (requires{std::unordered_map<edge_id_t<GraphRefT>, T>{};}) {
 			return std::unordered_map<edge_id_t<GraphRefT>, T>{};
@@ -377,6 +449,11 @@ namespace g2x {
 		}
 	}
 
+	/*
+	 * Returns an object 'el' where for a valid edge index 'e' of a graph 'g'
+	 * the expression 'el[e]' yields a reference to an object of type T
+	 * owned by 'el'. The initial value of such objects is equivalent to "value".
+	 */
 	template<typename T, typename GraphRefT>
 	auto create_edge_labeling(GraphRefT&& graph, const T& value) {
 		auto labeling = create_edge_labeling<T>(graph);
@@ -457,19 +534,19 @@ namespace g2x {
 	template<typename T>
 	concept edge = requires(T e) {
 		requires std::tuple_size_v<T> == 3;
-		{std::get<0>(e)} -> std::same_as<typename T::vertex_id_type>;
-		{std::get<1>(e)} -> std::same_as<typename T::vertex_id_type>;
-		{std::get<2>(e)} -> std::same_as<typename T::edge_id_type>;
+		{std::get<0>(e)} -> std::convertible_to<typename T::vertex_id_type>;
+		{std::get<1>(e)} -> std::convertible_to<typename T::vertex_id_type>;
+		{std::get<2>(e)} -> std::convertible_to<typename T::edge_id_type>;
 	};
 
 
 	template<typename T, typename GraphRefT>
-	concept vertex_labeling_for = requires(T lc, vertex_id_t<GraphRefT> v) {
+	concept vertex_labeling = requires(T lc, vertex_id_t<GraphRefT> v) {
 		{lc[v]};
 	};
 
 	template<typename T, typename GraphRefT>
-	concept edge_labeling_for = requires(T lc, edge_id_t<GraphRefT> v) {
+	concept edge_labeling = requires(T lc, edge_id_t<GraphRefT> v) {
 		{lc[v]};
 	};
 
@@ -494,8 +571,8 @@ namespace g2x {
 		{all_vertices(graph)} -> detail::range_of_vertices_for<T>;
 		{all_edges(graph)} -> detail::range_of_edges_for<T>;
 		{edge_at(graph, e)} -> std::convertible_to<edge_t<T>>;
-		{create_vertex_labeling<int>(graph, 0)} -> vertex_labeling_for<T>;
-		{create_edge_labeling<int>(graph, 0)} -> edge_labeling_for<T>;
+		{create_vertex_labeling<int>(graph, 0)} -> vertex_labeling<T>;
+		{create_edge_labeling<int>(graph, 0)} -> edge_labeling<T>;
 	};
 	
 	template<typename T>
