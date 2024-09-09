@@ -31,6 +31,7 @@ graph2x_add_example("benchmark")
 graph2x_add_example("mag1")
 graph2x_add_example("hopcroft_karp_vis")
 
+
 if(GRAPH2X_BUILD_GRAPHICAL_EXAMPLES)
 	add_subdirectory("axxegro")
 	graph2x_add_example("graph_editor")

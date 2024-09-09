@@ -43,7 +43,14 @@ double bfs_benchmark(int numVertices, int numEdges) {
 
 double match_benchmark_sample(int numPartitionVertices, float avg_neigh) {
 
-	auto graph = g2x::graph_gen::random_edges_bipartite_deg(numPartitionVertices, numPartitionVertices, avg_neigh, std::mt19937_64{std::random_device{}()});
+	auto graph = g2x::nested_vec_graph(
+		numPartitionVertices*2,
+		g2x::graph_gen::random_edges_bipartite_deg(
+			numPartitionVertices, numPartitionVertices,
+			avg_neigh, std::mt19937_64{std::random_device{}()}
+		)
+	);
+
 
 	auto t0 = std::chrono::high_resolution_clock::now();
 
@@ -54,7 +61,7 @@ double match_benchmark_sample(int numPartitionVertices, float avg_neigh) {
 }
 
 double match_benchmark(int numPartitionVertices, float avg_neigh) {
-	int num_samples = 15;
+	int num_samples = 1;
 	double totalTime = 0.0;
 	for(int i=0; i<num_samples; i++) {
 		totalTime += match_benchmark_sample(numPartitionVertices, avg_neigh);

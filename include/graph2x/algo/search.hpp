@@ -189,7 +189,11 @@ namespace g2x {
 			}
 			
 			[[nodiscard]] vertex_search_state get_vertex_state(const vertex_id_type& v) const {
-				return state_container_[v];
+				if constexpr(requires{state_container_[v];}) {
+					return state_container_[v];
+				} else {
+					return state_container_.at(v);
+				}
 			}
 			
 			std::optional<edge_type> next_edge() {

@@ -10,7 +10,7 @@
 namespace g2x {
 	namespace graph_gen {
 
-		inline g2x::basic_graph random_edges_bipartite(int v1, int v2, double density, auto&& generator) {
+		inline auto random_edges_bipartite(int v1, int v2, double density, auto&& generator) {
 			std::vector<std::pair<int, int>> edges;
 			int num_edges_complete = v1*v2;
 			edges.reserve(num_edges_complete*density);
@@ -42,25 +42,16 @@ namespace g2x {
 
 				edge = !edge;
 			}
-			auto t1 = std::chrono::high_resolution_clock::now();
 
-			auto graph = g2x::basic_graph{v1+v2, edges};
-
-			auto t2 = std::chrono::high_resolution_clock::now();
-
-			double t1_ms = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(t1-t0).count();
-			double t2_ms = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(t2-t1).count();
-			// std::println("generating {} edges took {} ms ({} gen calls)", edges.size(), t1_ms, xd);
-			// std::println("constructing the graph took {} ms", t2_ms);
-			return graph;
+			return edges;
 		}
 
-		inline g2x::basic_graph random_edges_bipartite_card(int v1, int v2, int num_edges, auto&& generator) {
+		inline auto random_edges_bipartite_card(int v1, int v2, int num_edges, auto&& generator) {
 			double density = num_edges / (1.0f*v1*v2);
 			return random_edges_bipartite(v1, v2, density, generator);
 		}
 
-		inline g2x::basic_graph random_edges_bipartite_deg(int v1, int v2, double avg_deg, auto&& generator) {
+		inline auto random_edges_bipartite_deg(int v1, int v2, double avg_deg, auto&& generator) {
 			double density = avg_deg * (v1+v2) / (2.0f*v1*v2);
 			return random_edges_bipartite(v1, v2, density, generator);
 		}

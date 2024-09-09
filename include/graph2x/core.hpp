@@ -237,7 +237,7 @@ namespace g2x {
 		inline constexpr bool outgoing_edges_uv_sorted_v = outgoing_edges_uv_sorted<GraphT>::value;
 	}
 
-	auto&& strip_index(auto&& edge_range) {
+	auto unindexed(auto&& edge_range) {
 		return edge_range | std::views::transform([&](auto&& edge) {
 			const auto& [u, v, i] = edge;
 			return std::pair {u, v};
@@ -269,6 +269,15 @@ namespace g2x {
 	template<typename GraphRefT>
 	auto all_edges(GraphRefT&& graph) {
 		return graph.all_edges();
+	}
+
+	/*
+	 * Returns the range consisting of all edges in the graph, viewed as tuple-likes
+	 * [src_vertex, dst_vertex].
+	 */
+	template<typename GraphRefT>
+	auto all_edges_unindexed(GraphRefT&& graph) {
+		return unindexed(all_edges(graph));
 	}
 
 	/*

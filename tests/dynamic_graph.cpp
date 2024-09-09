@@ -1,5 +1,5 @@
-#include <gtest/gtest.h>
-#include <graph2x.hpp>
+
+#include "tests_pch.hpp"
 
 namespace {
 

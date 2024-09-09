@@ -1,7 +1,6 @@
-#include <gtest/gtest.h>
-#include <graph2x.hpp>
 
-#include <set>
+
+#include "tests_pch.hpp"
 
 
 namespace {
@@ -74,3 +73,4 @@ namespace {
 
 
 }
+

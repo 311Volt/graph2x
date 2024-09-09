@@ -247,8 +247,8 @@ namespace g2x {
 				const auto& [u, v, _] = edge;
 
 
-				int degU = std::clamp<int>(std::ranges::size(outgoing_edges(graph, u)), 0, 9);
-				int degV = std::clamp<int>(std::ranges::size(outgoing_edges(graph, v)), 0, 9);
+				int degU = std::clamp<int>(std::ranges::distance(outgoing_edges(graph, u)), 0, 9);
+				int degV = std::clamp<int>(std::ranges::distance(outgoing_edges(graph, v)), 0, 9);
 
 				int idx = degU*10 + degV;
 				return lookup_table[idx];
