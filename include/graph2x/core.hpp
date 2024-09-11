@@ -12,6 +12,13 @@
 #include <vector>
 
 namespace g2x {
+
+	using isize = std::ptrdiff_t;
+	using usize = std::size_t;
+
+	// this exists because std::vector<bool>
+	using boolean = char;
+
 	namespace detail {
 		
 		template<typename T>
@@ -239,7 +246,7 @@ namespace g2x {
 
 	auto unindexed(auto&& edge_range) {
 		return edge_range | std::views::transform([&](auto&& edge) {
-			const auto& [u, v, i] = edge;
+			auto&& [u, v, i] = edge;
 			return std::pair {u, v};
 		});;
 	}
@@ -292,6 +299,14 @@ namespace g2x {
 	template<typename GraphRefT>
 	auto outgoing_edges(GraphRefT&& graph, const vertex_id_t<GraphRefT>& v) {
 		return graph.outgoing_edges(v);
+	}
+
+	/*
+	 * Equivalent to unindexed(outgoing_edges(graph, v)).
+	 */
+	template<typename GraphRefT>
+	auto outgoing_edges_unindexed(GraphRefT&& graph, const vertex_id_t<GraphRefT>& v) {
+		return unindexed(outgoing_edges(graph, v));
 	}
 
 	/*
@@ -393,12 +408,20 @@ namespace g2x {
 	 */
 	template<typename GraphRefT>
 	auto degree(GraphRefT&& graph, const vertex_id_t<GraphRefT>& v) {
+		using GraphT = std::remove_cvref_t<GraphRefT>;
 		if constexpr (requires{graph.degree(v);}) {
 			return graph.degree(v);
 		} else if constexpr (requires{graph.outdegree(v);}) {
 			return graph.outdegree(v);
+		} else if constexpr (graph_traits::is_directed_v<GraphT>){
+			return std::ranges::size(outgoing_edges(graph, v));
 		} else {
-			return std::ranges::size(outgoing_edges(graph));
+			isize result = 0;
+			for(const auto& [u1, v1]: outgoing_edges_unindexed(graph, v)) {
+				if(u1 == v) ++result;
+				if(v1 == v) ++result;
+			}
+			return result;
 		}
 	}
 
@@ -628,11 +651,6 @@ namespace g2x {
 	template<typename T>
 	concept mutable_graph = buildable_graph<T> && reducible_graph<T>;
 
-	// this exists because std::vector<bool>
-	using boolean = char;
-
-	using isize = std::ptrdiff_t;
-	using usize = std::size_t;
 
 	using vertex_count = std::optional<int>;
 	inline constexpr vertex_count auto_num_vertices = std::nullopt;

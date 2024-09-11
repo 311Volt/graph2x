@@ -8,35 +8,72 @@
 namespace g2x {
 	namespace algo {
 
+		auto compute_articulation_points_brute_force(graph auto&& graph) {
+
+			using vid_t = vertex_id_t<decltype(graph)>;
+			std::vector<std::tuple<vid_t, vid_t, vid_t>> articulation_points;
+
+			vid_t current_vertex{};
+			breadth_first_search bfs(graph, [&](auto&& edge) {
+				const auto& [u, v, i] = edge;
+				return u != current_vertex && v != current_vertex;
+			});
+
+			for(const auto& candidate: all_vertices(graph)) {
+				current_vertex = candidate;
+
+				std::vector<vid_t> component_roots;
+				for(const auto& v: all_vertices(graph)) {
+					if(bfs.get_vertex_state(v) == vertex_search_state::unvisited) {
+						bfs.add_vertex(v);
+						while(bfs.next_vertex()) {}
+						component_roots.push_back(v);
+					}
+				}
+				if(component_roots.size() > 1) {
+					articulation_points.emplace_back(candidate, component_roots[0], component_roots[1]);
+				}
+			}
+
+			return articulation_points;
+		}
+
 		auto compute_articulation_points(graph auto&& graph) {
 
-			depth_first_search dfs(graph);
-
+			using vid_t = vertex_id_t<decltype(graph)>;
 
 			auto depths = create_vertex_labeling<int>(graph, -1);
 			auto lowpoints = create_vertex_labeling<int>(graph, -1);
-			std::vector<vertex_id_t<decltype(graph)>> dfs_order;
+			auto visited = create_vertex_labeling<boolean>(graph, false);
+			std::vector<std::tuple<vid_t, vid_t, vid_t>> articulation_points;
 
-			for(const auto& v: all_vertices(graph)) {
-				if(depths[v] != -1) {
+			for(const auto& root: all_vertices(graph)) {
+				if(visited[root]) {
 					continue;
 				}
-				dfs.add_vertex(v);
-				depths[v] = 0;
-				while(auto v_opt = dfs.next_vertex()) {
-					if(auto e_opt = dfs.source_edge(*v_opt)) {
-						const auto& [u, v, i] = *e_opt;
-						depths[v] = depths[u]+1;
+
+				[&](this auto&& self, const vid_t* parent, const vid_t& v, int depth) {
+
+					visited[v] = true;
+					depths[v] = depth;
+					lowpoints[v] = depth;
+					int num_children = 0;
+
+					for(const auto& neigh: adjacent_vertices(graph, v)) {
+						if(not visited[neigh]) {
+							self(&v, neigh, depth+1);
+							++num_children;
+							lowpoints[v] = std::min(lowpoints[v], lowpoints[neigh]);
+
+
+						} else if(parent && *parent != neigh) {
+							lowpoints[v] = std::min(lowpoints[v], lowpoints[neigh]);
+						}
 					}
-					dfs_order.push_back(*v_opt);
-				}
+
+				}(nullptr, root, 0);
 			}
 
-			for(const auto& v: std::views::reverse(dfs_order)) {
-				if(auto e_opt = dfs.source_edge(v)) {
-					const auto& [u, v, i] = *e_opt;
-				}
-			}
 
 
 		}

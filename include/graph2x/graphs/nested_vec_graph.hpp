@@ -1,6 +1,6 @@
 
-#ifndef GRAPH2X_COMPACT_GRAPH_HPP
-#define GRAPH2X_COMPACT_GRAPH_HPP
+#ifndef GRAPH2X_NESTED_VEC_GRAPH_HPP
+#define GRAPH2X_NESTED_VEC_GRAPH_HPP
 
 #include <list>
 
@@ -102,4 +102,4 @@ namespace g2x {
 
 }
 
-#endif //GRAPH2X_COMPACT_GRAPH_HPP
+#endif //GRAPH2X_NESTED_VEC_GRAPH_HPP

@@ -93,8 +93,8 @@ namespace g2x {
 			}
 
 			std::vector<EIdxT> eids_to_remove;
-			std::ranges::copy(out_adj_index_.at(vtx), std::back_inserter(eids_to_remove));
-			std::ranges::copy(in_adj_index_.at(vtx), std::back_inserter(eids_to_remove));
+			std::ranges::copy(std::views::values(out_adj_index_.at(vtx)), std::back_inserter(eids_to_remove));
+			std::ranges::copy(std::views::values(in_adj_index_.at(vtx)), std::back_inserter(eids_to_remove));
 			for(auto eid: eids_to_remove) {
 				edges_.erase(eid);
 			}
@@ -120,14 +120,14 @@ namespace g2x {
 			const auto& [u, v, i] = edge_at(eid);
 			{
 				auto [beg, end] = out_adj_index_[u].equal_range(v);
-				auto it = std::ranges::find(beg, end, {v, eid});
+				auto it = std::ranges::find(beg, end, std::pair{v, eid});
 				if(it != end) {
 					out_adj_index_[u].erase(it);
 				}
 			}
 			{
 				auto [beg, end] = in_adj_index_[v].equal_range(u);
-				auto it = std::ranges::find(beg, end, {u, eid});
+				auto it = std::ranges::find(beg, end, std::pair{u, eid});
 				if(it != end) {
 					in_adj_index_[v].erase(it);
 				}
@@ -143,7 +143,11 @@ namespace g2x {
 			if constexpr (is_directed) {
 				return out_adj_index_.at(vtx);
 			} else {
-				return std::array {std::ranges::ref_view(out_adj_index_.at(vtx)), std::ranges::ref_view(in_adj_index_.at(vtx))}
+				return
+					std::array {
+						std::ranges::ref_view(out_adj_index_.at(vtx)),
+						std::ranges::ref_view(in_adj_index_.at(vtx))
+					}
 					| std::views::join;
 			}
 		}

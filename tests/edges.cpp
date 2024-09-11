@@ -13,7 +13,7 @@ namespace {
     }
 
 	TEST(edge_tests, undir_full_edge_hash) {
-		g2x::edge_value<int, int, false> e1 {2,3,0}, e2 {3,2,0}, e3{2,3,2};
+		g2x::edge_value<int, int, false> e1 {2,3,0}, e2 {3,2,0}, e3{2,3,1};
 		std::hash<decltype(e1)> hasher{};
 		EXPECT_EQ(hasher(e1), hasher(e2));
 		// EXPECT_NE(hasher(e1), hasher(e3));
