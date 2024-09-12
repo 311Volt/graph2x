@@ -73,6 +73,22 @@ namespace g2x {
 			}
 		}
 
+		[[nodiscard]] edge_value swap_to_first(const VtxIdT& vtx) const {
+			if(u != vtx) {
+				return {v, u, i};
+			} else {
+				return {u, v, i};
+			}
+		}
+
+		[[nodiscard]] edge_value swap_to_second(const VtxIdT& vtx) const {
+			if(v != vtx) {
+				return {v, u, i};
+			} else {
+				return {u, v, i};
+			}
+		}
+
 		[[nodiscard]] auto normalized_tuple() const {
 			if constexpr (IsDirected) {
 				return std::tuple {u, v, i};
@@ -112,6 +128,23 @@ namespace g2x {
 				return self.normalized_pair();
 			}
 		}
+
+		[[nodiscard]] simplified_edge_value swap_to_first(const VtxIdT& vtx) const {
+			if(u != vtx) {
+				return {v, u};
+			} else {
+				return {u, v};
+			}
+		}
+
+		[[nodiscard]] simplified_edge_value swap_to_second(const VtxIdT& vtx) const {
+			if(v != vtx) {
+				return {v, u};
+			} else {
+				return {u, v};
+			}
+		}
+
 
 		[[nodiscard]] auto normalized_pair() const {
 			if constexpr (IsDirected) {
@@ -242,6 +275,28 @@ namespace g2x {
 
 		template<typename GraphT>
 		inline constexpr bool outgoing_edges_uv_sorted_v = outgoing_edges_uv_sorted<GraphT>::value;
+
+
+		template<typename GraphT>
+		struct outgoing_edges_pre_swapped {
+			static constexpr bool value = requires {
+				requires GraphT::outgoing_edges_pre_swapped;
+			};
+		};
+
+		template<typename GraphT>
+		inline constexpr bool outgoing_edges_pre_swapped_v = outgoing_edges_pre_swapped<GraphT>::value;
+
+
+		template<typename GraphT>
+		struct incoming_edges_pre_swapped {
+			static constexpr bool value = requires {
+				requires GraphT::incoming_edges_pre_swapped;
+			};
+		};
+
+		template<typename GraphT>
+		inline constexpr bool incoming_edges_pre_swapped_v = incoming_edges_pre_swapped<GraphT>::value;
 	}
 
 	auto unindexed(auto&& edge_range) {
@@ -298,7 +353,15 @@ namespace g2x {
 	 */
 	template<typename GraphRefT>
 	auto outgoing_edges(GraphRefT&& graph, const vertex_id_t<GraphRefT>& v) {
-		return graph.outgoing_edges(v);
+		using GraphT = std::remove_cvref_t<GraphRefT>;
+
+		if constexpr (graph_traits::outgoing_edges_pre_swapped_v<GraphT>) {
+			return graph.outgoing_edges(v);
+		} else {
+			return graph.outgoing_edges(v) | std::views::transform([&](const edge_t<GraphT>& edge) {
+				return edge.swap_to_first(v);
+			});
+		}
 	}
 
 	/*
@@ -319,7 +382,16 @@ namespace g2x {
 	 */
 	template<typename GraphRefT>
 	auto incoming_edges(GraphRefT&& graph, const vertex_id_t<GraphRefT>& v) {
-		return graph.incoming_edges(v);
+		using GraphT = std::remove_cvref_t<GraphRefT>;
+
+		if constexpr (graph_traits::incoming_edges_pre_swapped_v<GraphT>) {
+			return graph.incoming_edges(v);
+		} else {
+			return graph.incoming_edges(v) | std::views::transform([&](const edge_t<GraphT>& edge) {
+				return edge.swap_to_second(v);
+			});
+		}
+		// return graph.incoming_edges(v);
 	}
 
 

@@ -44,7 +44,7 @@ void hk73_test_avg_deg_vs_num_iters(int v, float avg_deg_min, float avg_deg_max,
 		for(int smp=0; smp<samples_per_point; smp++) {
 			time_ms += benchmark_ms(
 				[&]() {
-					graph = g2x::graph_gen::random_edges_bipartite_deg(v, v, avg_deg, g_random_generator);
+					graph = g2x::basic_graph(2*v, g2x::graph_gen::random_edges_bipartite_deg(v, v, avg_deg, g_random_generator));
 				},
 				[&]() {
 					auto matching = g2x::algo::max_bipartite_matching(graph);
@@ -75,7 +75,7 @@ void hk73_test_slowest_avg_deg(int v_min, int v_max, int v_step) {
 			for(int smp=0; smp<samples_per_point; smp++) {
 				benchmark_ms(
 					[&]() {
-						graph = g2x::graph_gen::random_edges_bipartite_deg(v, v, avg_deg, g_random_generator);
+						graph = g2x::basic_graph(2*v, g2x::graph_gen::random_edges_bipartite_deg(v, v, avg_deg, g_random_generator));
 					},
 					[&]() {
 						auto matching = g2x::algo::max_bipartite_matching(graph);
@@ -95,7 +95,8 @@ void hk73_test_slowest_avg_deg(int v_min, int v_max, int v_step) {
 
 void hk73_test_randomized_dfs() {
 
-	auto graph = g2x::graph_gen::random_edges_bipartite_deg(2000, 2000, 3.0, g_random_generator);
+	auto edges = g2x::graph_gen::random_edges_bipartite_deg(2000, 2000, 3.0, g_random_generator);
+	auto graph = g2x::basic_graph(4000, edges);
 	//
 	// g2x::algo::config::hopcroft_karp.edge_choice_strategy = g2x::algo::config::hk73_edge_choice_strategy_t::random;
 	// g2x::algo::config::hopcroft_karp.vertex_choice_strategy = g2x::algo::config::hk73_vertex_choice_strategy_t::random;
@@ -133,13 +134,43 @@ void hk73_test_randomized_dfs() {
 
 }
 
+void test_articulation_point_detection() {
+
+	std::mt19937_64 gen{311};
+	for(int i=0; i<500; i++) {
+		auto graph = g2x::basic_graph(50, g2x::graph_gen::random_edges_deg(50, 3.0, false, gen));
+		auto art_points_brute = g2x::algo::compute_articulation_points_brute_force(graph) | std::ranges::to<std::set>();
+		auto art_points = g2x::algo::compute_articulation_points(graph) | std::ranges::to<std::set>();
+
+		if(art_points != art_points_brute) {
+			std::println("test {} FAIL", i);
+			std::println("expected:");
+			for(const auto& v: art_points_brute) {
+				std::print("{} ", v);
+			}
+			std::println("\nactual:");
+			for(const auto& v: art_points) {
+				std::print("{} ", v);
+			}
+			std::println("");
+		} else {
+			std::println("test {} OK", i);
+		}
+
+
+	}
+
+
+
+}
 
 
 int main() {
 
 	// hk73_test_randomized_dfs();
 
-	 hk73_test_avg_deg_vs_num_iters(500, 1.0, 5.0, 0.02);
+	test_articulation_point_detection();
+	 //hk73_test_avg_deg_vs_num_iters(500, 1.0, 5.0, 0.02);
 
 	//  std::println("cost stats: ");
 	//  for(int u=0; u<10; u++) {

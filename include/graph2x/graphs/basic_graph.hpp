@@ -39,6 +39,7 @@ namespace g2x {
 		static constexpr bool has_natural_vertex_numbering = true;
 		static constexpr bool has_natural_edge_numbering = true;
 		static constexpr bool outgoing_edges_uv_sorted = true;
+		static constexpr bool outgoing_edges_pre_swapped = true;
 
 	private:
 		isize num_vertices_;

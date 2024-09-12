@@ -33,6 +33,9 @@ namespace g2x {
 		static constexpr bool has_natural_vertex_numbering = false;
 		static constexpr bool has_natural_edge_numbering = false;
 		static constexpr bool outgoing_edges_uv_sorted = false;
+		static constexpr bool outgoing_edges_pre_swapped = true;
+		static constexpr bool incoming_edges_pre_swapped = true;
+
 
 		using edge_value_type = edge_value<VIdxT, EIdxT, IsDirected>;
 		using vertex_id_type = typename edge_value_type::vertex_id_type;

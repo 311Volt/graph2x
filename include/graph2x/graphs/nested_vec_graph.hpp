@@ -53,7 +53,7 @@ namespace g2x {
 			return std::views::iota(0, num_vertices());
 		}
 
-		[[nodiscard]] auto edge_at(const edge_id_type& eid) const {
+		[[nodiscard]] auto&& edge_at(const edge_id_type& eid) const {
 			return edge_storage_.at(eid);
 		}
 
@@ -62,14 +62,7 @@ namespace g2x {
 		}
 
 		[[nodiscard]] auto outgoing_edges(const vertex_id_type& u) const {
-			return adj_storage_.at(u) | std::views::transform([&](auto&& eid) {
-				const auto [u1, v1, i1] = edge_at(eid);
-				if(u == u1) {
-					return edge_value_type{u1, v1, i1};
-				} else {
-					return edge_value_type{v1, u1, i1};
-				}
-			});
+			return adj_storage_.at(u) | std::views::transform([&](const edge_id_type& eid) {return edge_at(eid);});
 		}
 
 		vertex_id_type create_vertex() {
