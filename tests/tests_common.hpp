@@ -14,5 +14,8 @@ template class g2x::general_nested_vec_graph<int, int, true>;
 template class g2x::general_dynamic_graph<int, int, false>;
 template class g2x::general_dynamic_graph<int, int, true>;
 
+#define GRAPH2X_EXPAND(A) A
+#define GRAPH2X_CONCAT_NX(A, B) A ## B
+#define GRAPH2X_CONCAT(A, B) GRAPH2X_CONCAT_NX(A, B)
 
 #endif //GRAPH2X_TESTS_PCH_HPP

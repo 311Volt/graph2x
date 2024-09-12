@@ -1,5 +1,4 @@
-#include "tests_pch.hpp"
-
+#include "tests_common.hpp"
 
 namespace {
 

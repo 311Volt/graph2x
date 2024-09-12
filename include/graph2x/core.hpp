@@ -74,7 +74,7 @@ namespace g2x {
 		}
 
 		[[nodiscard]] edge_value swap_to_first(const VtxIdT& vtx) const {
-			if(u != vtx) {
+			if(u != vtx && v == vtx) {
 				return {v, u, i};
 			} else {
 				return {u, v, i};
@@ -82,7 +82,7 @@ namespace g2x {
 		}
 
 		[[nodiscard]] edge_value swap_to_second(const VtxIdT& vtx) const {
-			if(v != vtx) {
+			if(v != vtx && u == vtx) {
 				return {v, u, i};
 			} else {
 				return {u, v, i};
@@ -130,7 +130,7 @@ namespace g2x {
 		}
 
 		[[nodiscard]] simplified_edge_value swap_to_first(const VtxIdT& vtx) const {
-			if(u != vtx) {
+			if(u != vtx && v == vtx) {
 				return {v, u};
 			} else {
 				return {u, v};
@@ -138,7 +138,7 @@ namespace g2x {
 		}
 
 		[[nodiscard]] simplified_edge_value swap_to_second(const VtxIdT& vtx) const {
-			if(v != vtx) {
+			if(v != vtx && u == vtx) {
 				return {v, u};
 			} else {
 				return {u, v};

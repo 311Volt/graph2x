@@ -49,6 +49,12 @@ namespace g2x {
 
 		}
 
+		explicit general_dynamic_graph(int num_vertices, std::ranges::forward_range auto&& edges)
+			: general_dynamic_graph(std::forward<decltype(edges)>(edges))
+		{
+
+		}
+
 		[[nodiscard]] auto all_vertices() const {
 			return std::views::keys(out_adj_index_);
 		}

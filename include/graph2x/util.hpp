@@ -151,7 +151,10 @@ namespace g2x {
 		std::vector<T> data_;
 
 		auto&& access(this auto&& self, idx_t x, idx_t y) {
-			return self.data_[y * self.width() + x];
+			bool is_bool = std::same_as<T, bool>;
+			auto offset = y * self.width() + x;
+			auto&& ret = self.data_[offset];
+			return std::forward<decltype(ret)>(ret);
 		}
 
 		void bounds_check(idx_t x, idx_t y) {
