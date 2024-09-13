@@ -102,9 +102,6 @@ namespace {
 			{1,2}, {3,1}, {2,4}
 		});
 		auto edge_multiset = g2x::simplified(g2x::outgoing_edges(graph, 1)) | std::ranges::to<std::multiset>();
-		for(const auto& [u, v, _]: edge_multiset) {
-			std::print("{},{}\t", u, v);
-		}
 		EXPECT_TRUE(edge_multiset.contains({1, 2}));
 		if constexpr (not g2x::graph_traits::is_directed_v<TypeParam>) {
 			EXPECT_TRUE(edge_multiset.contains({1, 3}));
@@ -172,6 +169,89 @@ namespace {
 		}
 
 	}
+
+	TYPED_TEST(graph_types, outdegree) {
+		auto graph = g2x::create_graph<TypeParam>(edge_list{
+				{0, 1},
+				{1, 3},
+				{2, 1}
+		});
+
+		if(g2x::graph_traits::is_directed_v<TypeParam>) {
+			EXPECT_EQ(g2x::outdegree(graph, 1), 1);
+		} else {
+			EXPECT_EQ(g2x::degree(graph, 1), 3);
+		}
+	}
+
+	TYPED_TEST(graph_types, outdegree_multiple) {
+
+		if constexpr (g2x::graph_traits::allows_multiple_edges_v<TypeParam>) {
+			auto graph = g2x::create_graph<TypeParam>(edge_list{
+					{0, 1},
+					{1, 3},
+					{1, 3},
+					{2, 1}
+			});
+
+			if(g2x::graph_traits::is_directed_v<TypeParam>) {
+				EXPECT_EQ(g2x::outdegree(graph, 1), 2);
+			} else {
+				EXPECT_EQ(g2x::degree(graph, 1), 4);
+			}
+		} else {
+			GTEST_SKIP();
+		}
+
+
+	}
+
+	TYPED_TEST(graph_types, outdegree_loop) {
+
+		if constexpr (g2x::graph_traits::allows_loops_v<TypeParam>) {
+			auto graph = g2x::create_graph<TypeParam>(edge_list{
+					{0, 1},
+					{2, 2},
+					{2, 1},
+					{2, 3}
+			});
+
+			if(g2x::graph_traits::is_directed_v<TypeParam>) {
+				EXPECT_EQ(g2x::outdegree(graph, 2), 3);
+			} else {
+				EXPECT_EQ(g2x::degree(graph, 2), 4);
+			}
+		} else {
+			GTEST_SKIP();
+		}
+
+	}
+
+	TYPED_TEST(graph_types, vertex_labeling) {
+		auto graph = g2x::create_graph<TypeParam>(edge_list{
+			{0,1}, {0,2}, {0,2},
+			{1,2}, {3,1}, {2,4}
+		});
+
+		auto l = g2x::create_vertex_labeling<int>(graph, 311);
+		for(const auto& v: g2x::all_vertices(graph)) {
+			EXPECT_EQ(l[v], 311);
+		}
+	}
+
+
+	TYPED_TEST(graph_types, edge_labeling) {
+		auto graph = g2x::create_graph<TypeParam>(edge_list{
+			{0,1}, {0,2}, {0,2},
+			{1,2}, {3,1}, {2,4}
+		});
+
+		auto l = g2x::create_edge_labeling<int>(graph, 311);
+		for(const auto& [u, v, i]: g2x::all_edges(graph)) {
+			EXPECT_EQ(l[i], 311);
+		}
+	}
+
 
 	TYPED_TEST(graph_types, undirected_all_edges_should_not_yield_duplicates) {
 		if constexpr(g2x::graph_traits::is_directed_v<TypeParam> == false) {

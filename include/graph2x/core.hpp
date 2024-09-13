@@ -140,10 +140,8 @@ namespace g2x {
 
 		[[nodiscard]] simplified_edge_value swap_to_first(const VtxIdT& vtx) const {
 			if(u != vtx && v == vtx) {
-				std::println("swap_to_first {} ({} {}) -> ({} {})", vtx, u, v, v, u);
 				return {v, u};
 			} else {
-				std::println("swap_to_first {} ({} {}) -> ({} {})", vtx, u, v, u, v);
 				return *this;
 			}
 		}
@@ -334,6 +332,19 @@ namespace g2x {
 		});
 	}
 
+	auto transposed(auto&& edge_range)
+	{
+		using edge_t = std::remove_cvref_t<std::ranges::range_value_t<decltype(edge_range)>>;
+		return std::views::all(std::forward<decltype(edge_range)>(edge_range)) | std::views::transform([](auto&& edge) {
+			const auto& [u, v, i] = edge;
+			if constexpr(edge_value_c<edge_t>) {
+				return edge_t{v, u, i};
+			} else {
+				return edge_t{v, u};
+			}
+		});
+	}
+
 	auto simplified(auto&& edge_range)
 		requires simplified_edge_value_c<std::remove_cvref_t<std::ranges::range_value_t<decltype(edge_range)>>>
 	{
@@ -393,7 +404,7 @@ namespace g2x {
 		static constexpr bool pre_swapped = graph_traits::outgoing_edges_pre_swapped_v<GraphT>;
 
 		if constexpr (not is_directed && not pre_swapped) {
-			return graph.outgoing_edges(v) | std::views::transform([v](const edge_t<GraphT>& edge) {
+			return std::views::all(graph.outgoing_edges(v)) | std::views::transform([v](const edge_t<GraphT>& edge) {
 				return edge.swap_to_first(v);
 			});
 		} else {
@@ -410,25 +421,39 @@ namespace g2x {
 	}
 
 	/*
-	 * Returns a range of all edges that are incoming to v. Similarly to the behavior of
-	 * outgoing_edges, the second element of each tuple-like in the returned range is
-	 * guaranteed to be equivalent to v.
+	 * Returns a range of all edges that are incoming to v in a digraph.
+	 * Similarly to the behavior of outgoing_edges, the second element of each
+	 * tuple-like in the returned range is guaranteed to be equivalent to v.
 	 *
 	 * This is expected to be unimplemented in most cases. Only rely on this function's
 	 * availability if fast access to the list of incoming edges is crucial.
 	 */
 	template<typename GraphRefT>
-	auto incoming_edges(GraphRefT&& graph, vertex_id_t<GraphRefT> v) {
+	auto incoming_edges(GraphRefT&& graph, vertex_id_t<GraphRefT> v)
+		requires graph_traits::is_directed_v<std::remove_cvref_t<GraphRefT>>
+	{
 		using GraphT = std::remove_cvref_t<GraphRefT>;
 
 		if constexpr (graph_traits::incoming_edges_pre_swapped_v<GraphT>) {
 			return std::views::all(graph.incoming_edges(v));
 		} else {
-			return graph.incoming_edges(v) | std::views::transform([v](const edge_t<GraphT>& edge) {
+			return std::views::all(graph.incoming_edges(v)) | std::views::transform([v](const edge_t<GraphT>& edge) {
 				return edge.swap_to_second(v);
 			});
 		}
-		// return graph.incoming_edges(v);
+	}
+
+	/*
+	 * For undirected graphs, incoming_edges is equivalent to outgoing_edges, except
+	 * the second element of each tuple-like is guaranteed to be equivalent to v.
+	 */
+	template<typename GraphRefT>
+	auto incoming_edges(GraphRefT&& graph, vertex_id_t<GraphRefT> v)
+		requires (not graph_traits::is_directed_v<std::remove_cvref_t<GraphRefT>>)
+	{
+		return outgoing_edges(graph, v)| std::views::transform([v](const edge_t<GraphRefT>& edge) {
+			return edge.swap_to_second(v);
+		});
 	}
 
 
@@ -436,7 +461,7 @@ namespace g2x {
 	 * Returns the value of the edge of a given index.
 	 */
 	template<typename GraphRefT>
-	auto edge_at(GraphRefT&& graph, const edge_id_t<GraphRefT>& index) {
+	auto edge_at(GraphRefT&& graph, edge_id_t<GraphRefT> index) {
 		using vid_t = vertex_id_t<GraphRefT>;
 		using ev_t = edge_t<GraphRefT>;
 		if constexpr(requires{typename ev_t::g2x_simplified_edge_value;}) {
@@ -523,7 +548,7 @@ namespace g2x {
 		} else if constexpr (requires{graph.outdegree(v);}) {
 			return graph.outdegree(v);
 		} else if constexpr (graph_traits::is_directed_v<GraphT>){
-			return std::ranges::size(outgoing_edges(graph, v));
+			return std::ranges::distance(outgoing_edges(graph, v));
 		} else {
 			isize result = 0;
 			for(const auto& [u1, v1]: outgoing_edges_unindexed(graph, v)) {
@@ -545,7 +570,7 @@ namespace g2x {
 		} else if constexpr (requires{graph.degree(v);}) {
 			return graph.degree(v);
 		} else {
-			return std::ranges::size(outgoing_edges(graph));
+			return std::ranges::distance(outgoing_edges(graph, v));
 		}
 	}
 
@@ -558,7 +583,7 @@ namespace g2x {
 		if constexpr (requires{graph.indegree(v);}) {
 			return graph.indegree(v);
 		} else {
-			return std::ranges::size(incoming_edges(graph));
+			return std::ranges::distance(incoming_edges(graph, v));
 		}
 	}
 
@@ -674,7 +699,7 @@ namespace g2x {
 	 * Removes a specific edge from a graph.
 	 */
 	template<typename GraphRefT>
-	bool remove_edge(GraphRefT&& graph, const edge_id_t<GraphRefT>& e) {
+	bool remove_edge(GraphRefT&& graph, edge_id_t<GraphRefT> e) {
 		return graph.remove_edge(e);
 	}
 

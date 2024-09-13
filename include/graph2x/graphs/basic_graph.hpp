@@ -56,7 +56,7 @@ namespace g2x {
 			return {adjacency_regions.at(v), adjacency_regions.at(v+1)};
 		}
 
-		[[nodiscard]] bool is_edge_unique(const edge_value_type& e) const {
+		[[nodiscard]] bool is_edge_unique(edge_value_type e) const {
 			if constexpr(is_directed) {
 				return true;
 			}
@@ -156,7 +156,7 @@ namespace g2x {
 		}
 		
 		[[nodiscard]] auto all_edges() const {
-			return edge_storage | std::views::filter([this](const edge_value_type& e){return is_edge_unique(e);});
+			return edge_storage | std::views::filter([this](edge_value_type e){return is_edge_unique(e);});
 		}
 
 	};

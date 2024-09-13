@@ -63,7 +63,7 @@ namespace g2x {
 			return std::views::values(edges_);
 		}
 
-		[[nodiscard]] auto edge_at(const edge_id_type& eid) const {
+		[[nodiscard]] auto edge_at(edge_id_type eid) const {
 			return edges_.at(eid);
 		}
 
@@ -125,7 +125,7 @@ namespace g2x {
 			return edge_id;
 		}
 
-		void remove_edge(const edge_id_type& eid) {
+		void remove_edge(edge_id_type eid) {
 			const auto& [u, v, i] = edge_at(eid);
 			{
 				auto [beg, end] = out_adj_index_[u].equal_range(v);
