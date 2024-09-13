@@ -67,7 +67,7 @@ namespace g2x {
 			return edges_.at(eid);
 		}
 
-		[[nodiscard]] auto is_adjacent(const vertex_id_type& u, const vertex_id_type& v) {
+		[[nodiscard]] auto is_adjacent(vertex_id_type u, vertex_id_type v) {
 			bool result = out_adj_index_.at(u).contains(v);
 			if constexpr (not is_directed) {
 				result |= in_adj_index_.at(u).contains(v);
@@ -75,28 +75,28 @@ namespace g2x {
 			return result;
 		}
 
-		[[nodiscard]] auto outgoing_edges(const vertex_id_type& vtx) const {
-			return outgoing_edges_source_range(vtx) | std::views::transform([&](auto&& vi) {
+		[[nodiscard]] auto outgoing_edges(vertex_id_type vtx) const {
+			return outgoing_edges_source_range(vtx) | std::views::transform([vtx](auto&& vi) {
 				auto [v, i] = vi;
 				return edge_value_type{vtx, v, i};
 			});
 		}
 
-		[[nodiscard]] auto incoming_edges(const vertex_id_type& vtx) const
+		[[nodiscard]] auto incoming_edges(vertex_id_type vtx) const
 			requires IsDirected
 		{
-			return in_adj_index_.at(vtx) | std::views::transform([&](auto&& vi) {
+			return in_adj_index_.at(vtx) | std::views::transform([vtx](auto&& vi) {
 				auto [v, i] = vi;
 				return edge_value_type{v, vtx, i};
 			});
 		}
 
-		void add_vertex(const vertex_id_type& vtx) {
+		void add_vertex(vertex_id_type vtx) {
 			out_adj_index_[vtx];
 			in_adj_index_[vtx];
 		}
 
-		bool remove_vertex(const vertex_id_type& vtx) {
+		bool remove_vertex(vertex_id_type vtx) {
 			if(not out_adj_index_.contains(vtx)) {
 				return false;
 			}
@@ -113,7 +113,7 @@ namespace g2x {
 			return true;
 		}
 
-		auto add_edge(const vertex_id_type& u, const vertex_id_type& v) {
+		auto add_edge(vertex_id_type u, vertex_id_type v) {
 			auto edge_id = edge_id_counter++;
 			add_vertex(u);
 			add_vertex(v);
@@ -148,14 +148,14 @@ namespace g2x {
 
 	private:
 
-		auto outgoing_edges_source_range(const vertex_id_type& vtx) const {
+		auto outgoing_edges_source_range(vertex_id_type vtx) const {
 			if constexpr (is_directed) {
-				return out_adj_index_.at(vtx);
+				return std::views::all(out_adj_index_.at(vtx));
 			} else {
 				return
 					std::array {
-						std::ranges::ref_view(out_adj_index_.at(vtx)),
-						std::ranges::ref_view(in_adj_index_.at(vtx))
+						std::views::all(out_adj_index_.at(vtx)),
+						std::views::all(in_adj_index_.at(vtx))
 					}
 					| std::views::join;
 			}

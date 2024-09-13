@@ -9,7 +9,9 @@
 #include <unordered_map>
 #include <algorithm>
 #include <functional>
+#include <ostream>
 #include <vector>
+#include <print>
 
 namespace g2x {
 
@@ -58,6 +60,7 @@ namespace g2x {
 		VtxIdT v;
 		EdgeIdT i;
 
+		static constexpr bool is_directed = IsDirected;
 		using g2x_edge_value = void;
 		using vertex_id_type = VtxIdT;
 		using edge_id_type = EdgeIdT;
@@ -77,7 +80,7 @@ namespace g2x {
 			if(u != vtx && v == vtx) {
 				return {v, u, i};
 			} else {
-				return {u, v, i};
+				return *this;
 			}
 		}
 
@@ -85,7 +88,7 @@ namespace g2x {
 			if(v != vtx && u == vtx) {
 				return {v, u, i};
 			} else {
-				return {u, v, i};
+				return *this;
 			}
 		}
 
@@ -109,11 +112,17 @@ namespace g2x {
 
 	};
 
+	template<typename T>
+	concept edge_value_c = requires {
+		typename T::g2x_edge_value;
+	};
+
 	template<typename VtxIdT, bool IsDirected = true>
 	struct simplified_edge_value {
 		VtxIdT u;
 		VtxIdT v;
 
+		static constexpr bool is_directed = IsDirected;
 		using g2x_simplified_edge_value = void;
 		using vertex_id_type = VtxIdT;
 		using edge_id_type = std::pair<VtxIdT, VtxIdT>;
@@ -131,9 +140,11 @@ namespace g2x {
 
 		[[nodiscard]] simplified_edge_value swap_to_first(const VtxIdT& vtx) const {
 			if(u != vtx && v == vtx) {
+				std::println("swap_to_first {} ({} {}) -> ({} {})", vtx, u, v, v, u);
 				return {v, u};
 			} else {
-				return {u, v};
+				std::println("swap_to_first {} ({} {}) -> ({} {})", vtx, u, v, u, v);
+				return *this;
 			}
 		}
 
@@ -141,7 +152,7 @@ namespace g2x {
 			if(v != vtx && u == vtx) {
 				return {v, u};
 			} else {
-				return {u, v};
+				return *this;
 			}
 		}
 
@@ -162,6 +173,12 @@ namespace g2x {
 			return a.normalized_pair() == b.normalized_pair();
 		}
 	};
+
+	template<typename T>
+	concept simplified_edge_value_c = requires {
+		typename T::g2x_simplified_edge_value;
+	};
+
 }
 
 template<typename VtxIdT, typename EdgeIdT, bool IsDirected>
@@ -299,11 +316,28 @@ namespace g2x {
 		inline constexpr bool incoming_edges_pre_swapped_v = incoming_edges_pre_swapped<GraphT>::value;
 	}
 
+
 	auto unindexed(auto&& edge_range) {
-		return edge_range | std::views::transform([&](auto&& edge) {
-			auto&& [u, v, i] = edge;
+		return std::views::all(std::forward<decltype(edge_range)>(edge_range)) | std::views::transform([](auto&& edge) {
+			const auto& [u, v, i] = edge;
 			return std::pair {u, v};
-		});;
+		});
+	}
+
+	auto simplified(auto&& edge_range)
+		requires edge_value_c<std::remove_cvref_t<std::ranges::range_value_t<decltype(edge_range)>>>
+	{
+		using edge_t = std::remove_cvref_t<std::ranges::range_value_t<decltype(edge_range)>>;
+		return std::views::all(std::forward<decltype(edge_range)>(edge_range)) | std::views::transform([](auto&& edge) {
+			const auto& [u, v, i] = edge;
+			return simplified_edge_value<typename edge_t::vertex_id_type, edge_t::is_directed> {u, v};
+		});
+	}
+
+	auto simplified(auto&& edge_range)
+		requires simplified_edge_value_c<std::remove_cvref_t<std::ranges::range_value_t<decltype(edge_range)>>>
+	{
+		return std::views::all(std::forward<decltype(edge_range)>(edge_range));
 	}
 
 
@@ -321,7 +355,7 @@ namespace g2x {
 	 */
 	template<typename GraphRefT>
 	auto all_vertices(GraphRefT&& graph) {
-		return graph.all_vertices();
+		return std::views::all(graph.all_vertices());
 	}
 
 	/*
@@ -330,7 +364,7 @@ namespace g2x {
 	 */
 	template<typename GraphRefT>
 	auto all_edges(GraphRefT&& graph) {
-		return graph.all_edges();
+		return std::views::all(graph.all_edges());
 	}
 
 	/*
@@ -348,19 +382,22 @@ namespace g2x {
 	 *
 	 * src_vertex is GUARANTEED to be equivalent to v. That is, if the graph is undirected
 	 * and outgoing_edges(4) is requested, a hypothetical edge (4, 1) will always be rendered
-	 * as [4, 1, i] and not as [1, 4, i] regardless of how it is stored internally. The behavior
-	 * of library functions is undefined if an implementation fails to meet this requirement.
+	 * as [4, 1, i] and not as [1, 4, i]. Such swapping is performed automatically unless a graph type
+	 * explicitly specifies that it outputs pre-swapped edges.
 	 */
 	template<typename GraphRefT>
-	auto outgoing_edges(GraphRefT&& graph, const vertex_id_t<GraphRefT>& v) {
+	auto outgoing_edges(GraphRefT&& graph, vertex_id_t<GraphRefT> v) {
 		using GraphT = std::remove_cvref_t<GraphRefT>;
 
-		if constexpr (graph_traits::outgoing_edges_pre_swapped_v<GraphT>) {
-			return graph.outgoing_edges(v);
-		} else {
-			return graph.outgoing_edges(v) | std::views::transform([&](const edge_t<GraphT>& edge) {
+		static constexpr bool is_directed = graph_traits::is_directed_v<GraphT>;
+		static constexpr bool pre_swapped = graph_traits::outgoing_edges_pre_swapped_v<GraphT>;
+
+		if constexpr (not is_directed && not pre_swapped) {
+			return graph.outgoing_edges(v) | std::views::transform([v](const edge_t<GraphT>& edge) {
 				return edge.swap_to_first(v);
 			});
+		} else {
+			return std::views::all(graph.outgoing_edges(v));
 		}
 	}
 
@@ -368,7 +405,7 @@ namespace g2x {
 	 * Equivalent to unindexed(outgoing_edges(graph, v)).
 	 */
 	template<typename GraphRefT>
-	auto outgoing_edges_unindexed(GraphRefT&& graph, const vertex_id_t<GraphRefT>& v) {
+	auto outgoing_edges_unindexed(GraphRefT&& graph, vertex_id_t<GraphRefT> v) {
 		return unindexed(outgoing_edges(graph, v));
 	}
 
@@ -381,13 +418,13 @@ namespace g2x {
 	 * availability if fast access to the list of incoming edges is crucial.
 	 */
 	template<typename GraphRefT>
-	auto incoming_edges(GraphRefT&& graph, const vertex_id_t<GraphRefT>& v) {
+	auto incoming_edges(GraphRefT&& graph, vertex_id_t<GraphRefT> v) {
 		using GraphT = std::remove_cvref_t<GraphRefT>;
 
 		if constexpr (graph_traits::incoming_edges_pre_swapped_v<GraphT>) {
-			return graph.incoming_edges(v);
+			return std::views::all(graph.incoming_edges(v));
 		} else {
-			return graph.incoming_edges(v) | std::views::transform([&](const edge_t<GraphT>& edge) {
+			return graph.incoming_edges(v) | std::views::transform([v](const edge_t<GraphT>& edge) {
 				return edge.swap_to_second(v);
 			});
 		}
@@ -438,9 +475,9 @@ namespace g2x {
 	 * Returns a range of all vertices that are adjacent to v.
 	 */
 	template<typename GraphRefT>
-	auto adjacent_vertices(GraphRefT&& graph, const vertex_id_t<GraphRefT>& v) {
+	auto adjacent_vertices(GraphRefT&& graph, vertex_id_t<GraphRefT> v) {
 		if constexpr (requires {graph.adjacent_vertices(v);}) {
-			return graph.adjacent_vertices(v);
+			return std::views::all(graph.adjacent_vertices(v));
 		} else {
 			return outgoing_edges(graph, v) | std::views::transform([](auto&& e) {
 				const auto& [u, v, i] = e;
@@ -454,7 +491,7 @@ namespace g2x {
 	 * Returns whether a pair of vertices in a graph is adjacent.
 	 */
 	template<typename GraphRefT>
-	bool is_adjacent(GraphRefT&& graph, const vertex_id_t<GraphRefT>& u, const vertex_id_t<GraphRefT>& v) {
+	bool is_adjacent(GraphRefT&& graph, vertex_id_t<GraphRefT> u, vertex_id_t<GraphRefT> v) {
 		using GraphT = std::remove_cvref_t<GraphRefT>;
 		if constexpr (requires{graph.is_adjacent(u, v);}) {
 			return graph.is_adjacent(u, v);
@@ -479,7 +516,7 @@ namespace g2x {
 	 * 'outdegree' alias for clarity.
 	 */
 	template<typename GraphRefT>
-	auto degree(GraphRefT&& graph, const vertex_id_t<GraphRefT>& v) {
+	auto degree(GraphRefT&& graph, vertex_id_t<GraphRefT> v) {
 		using GraphT = std::remove_cvref_t<GraphRefT>;
 		if constexpr (requires{graph.degree(v);}) {
 			return graph.degree(v);
@@ -502,7 +539,7 @@ namespace g2x {
 	 * if both "degree" and "outdegree" are present.
 	 */
 	template<typename GraphRefT>
-	auto outdegree(GraphRefT&& graph, const vertex_id_t<GraphRefT>& v) {
+	auto outdegree(GraphRefT&& graph, vertex_id_t<GraphRefT> v) {
 		if constexpr (requires{graph.outdegree(v);}) {
 			return graph.outdegree(v);
 		} else if constexpr (requires{graph.degree(v);}) {
@@ -517,7 +554,7 @@ namespace g2x {
 	 * in the general case.
 	 */
 	template<typename GraphRefT>
-	auto indegree(GraphRefT&& graph, const vertex_id_t<GraphRefT>& v) {
+	auto indegree(GraphRefT&& graph, vertex_id_t<GraphRefT> v) {
 		if constexpr (requires{graph.indegree(v);}) {
 			return graph.indegree(v);
 		} else {
@@ -613,7 +650,7 @@ namespace g2x {
 	 * Creates a vertex in a graph with a given index, which is returned.
 	 */
 	template<typename GraphRefT>
-	auto add_vertex(GraphRefT&& graph, const vertex_id_t<GraphRefT>& v) -> vertex_id_t<GraphRefT> {
+	auto add_vertex(GraphRefT&& graph, vertex_id_t<GraphRefT> v) -> vertex_id_t<GraphRefT> {
 		return graph.add_vertex(v);
 	}
 
@@ -621,7 +658,7 @@ namespace g2x {
 	 * Creates an edge between a pair of vertices. The index of the created edge is returned.
 	 */
 	template<typename GraphRefT>
-	auto add_edge(GraphRefT&& graph, const vertex_id_t<GraphRefT>& u, const vertex_id_t<GraphRefT>& v) -> edge_id_t<GraphRefT> {
+	auto add_edge(GraphRefT&& graph, vertex_id_t<GraphRefT> u, vertex_id_t<GraphRefT> v) -> edge_id_t<GraphRefT> {
 		return graph.add_edge(u, v);
 	}
 
@@ -629,7 +666,7 @@ namespace g2x {
 	 * Removes a specific vertex from a graph.
 	 */
 	template<typename GraphRefT>
-	bool remove_vertex(GraphRefT&& graph, const vertex_id_t<GraphRefT>& v) {
+	bool remove_vertex(GraphRefT&& graph, vertex_id_t<GraphRefT> v) {
 		return graph.remove_vertex(v);
 	}
 
@@ -639,6 +676,28 @@ namespace g2x {
 	template<typename GraphRefT>
 	bool remove_edge(GraphRefT&& graph, const edge_id_t<GraphRefT>& e) {
 		return graph.remove_edge(e);
+	}
+
+	template<typename GraphT>
+	auto create_graph(std::ranges::forward_range auto&& edge_range) {
+		if constexpr (requires {GraphT(edge_range);}) {
+			return GraphT{std::forward<decltype(edge_range)>(edge_range)};
+		} else {
+			vertex_id_t<GraphT> max_v {};
+			for(const auto& [u, v]: edge_range) {
+				max_v = std::max(max_v, v);
+			}
+			return GraphT{max_v+1, std::forward<decltype(edge_range)>(edge_range)};
+		}
+	}
+
+	template<typename GraphT>
+	auto create_graph(isize num_vertices, std::ranges::forward_range auto&& edge_range) {
+		if constexpr (requires {GraphT(num_vertices, edge_range);}) {
+			return GraphT{num_vertices, std::forward<decltype(edge_range)>(edge_range)};
+		} else {
+			return GraphT{std::forward<decltype(edge_range)>(edge_range)};
+		}
 	}
 
 	namespace detail {
@@ -707,22 +766,78 @@ namespace g2x {
 		{create_vertex_labeling<int>(graph, 0)} -> vertex_labeling<T>;
 		{create_edge_labeling<int>(graph, 0)} -> edge_labeling<T>;
 	};
-	
-	template<typename T>
-	concept buildable_graph = graph<T> && requires(T graph, vertex_id_t<T> v, edge_id_t<T> e) {
-		{add_vertex(graph, v)} -> std::convertible_to<vertex_id_t<T>>;
-		{add_edge(graph, v, v)} -> std::convertible_to<edge_id_t<T>>;
-	};
 
-	template<typename T>
-	concept reducible_graph = graph<T> && requires(T graph, vertex_id_t<T> v, edge_id_t<T> e) {
-		{remove_vertex(graph, v)} -> std::convertible_to<bool>;
-		{remove_edge(graph, e)} -> std::convertible_to<bool>;
-	};
+	namespace graph_traits {
 
-	template<typename T>
-	concept mutable_graph = buildable_graph<T> && reducible_graph<T>;
+		template<typename GraphT>
+		struct supports_vertex_creation {
+			static constexpr bool value = requires(GraphT graph) {
+				create_vertex(graph);
+			};
+		};
+		template<typename GraphT>
+		inline constexpr bool supports_vertex_creation_v = supports_vertex_creation<GraphT>::value;
 
+
+
+		template<typename GraphT>
+		struct supports_vertex_addition {
+			static constexpr bool value = requires(GraphT graph, vertex_id_t<GraphT> v) {
+				add_vertex(graph, v);
+			};
+		};
+
+		template<typename GraphT>
+		inline constexpr bool supports_vertex_addition_v = supports_vertex_addition<GraphT>::value;
+
+
+
+		template<typename GraphT>
+		struct supports_vertex_deletion {
+			static constexpr bool value = requires(GraphT graph, vertex_id_t<GraphT> v) {
+				delete_vertex(graph, v);
+			};
+		};
+
+		template<typename GraphT>
+		inline constexpr bool supports_vertex_deletion_v = supports_vertex_deletion<GraphT>::value;
+
+		template<typename GraphT>
+		struct supports_edge_creation {
+			static constexpr bool value = requires(GraphT graph, vertex_id_t<GraphT> v) {
+				create_edge(graph, v, v);
+			};
+		};
+		template<typename GraphT>
+		inline constexpr bool supports_edge_creation_v = supports_edge_creation<GraphT>::value;
+
+
+
+		template<typename GraphT>
+		struct supports_edge_addition {
+			static constexpr bool value = requires(GraphT graph, vertex_id_t<GraphT> v, edge_id_t<GraphT> e) {
+				add_edge(graph, v, v, e);
+			};
+		};
+
+		template<typename GraphT>
+		inline constexpr bool supports_edge_addition_v = supports_edge_addition<GraphT>::value;
+
+
+
+		template<typename GraphT>
+		struct supports_edge_deletion {
+			static constexpr bool value = requires(GraphT graph, edge_id_t<GraphT> e) {
+				delete_edge(graph, e);
+			};
+		};
+
+		template<typename GraphT>
+		inline constexpr bool supports_edge_deletion_v = supports_edge_deletion<GraphT>::value;
+
+
+
+	}
 
 	using vertex_count = std::optional<int>;
 	inline constexpr vertex_count auto_num_vertices = std::nullopt;

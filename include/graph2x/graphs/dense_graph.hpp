@@ -35,8 +35,8 @@ namespace g2x {
 			return true;
 		}
 
-		[[nodiscard]] auto&& adj_matrix_ref(this auto&& self, vertex_id_type u, vertex_id_type v) {
-			return self.adj_matrix_[u, v];
+		[[nodiscard]] decltype(auto) adj_matrix_ref(this auto&& self, vertex_id_type u, vertex_id_type v) {
+			return self.adj_matrix_.at(u, v);
 		}
 
 	public:
@@ -62,10 +62,10 @@ namespace g2x {
 		}
 
 		[[nodiscard]] auto all_vertices() const {
-			return std::views::iota(0, num_vertices());
+			return std::views::iota(isize(0), isize(num_vertices()));
 		}
 
-		[[nodiscard]] auto outgoing_edges(const vertex_id_type& v) const {
+		[[nodiscard]] auto outgoing_edges(vertex_id_type v) const {
 			//TODO replace with a non-allocating version
 			std::vector<edge_value_type> edges;
 
@@ -78,8 +78,9 @@ namespace g2x {
 			return edges;
 		}
 
-		[[nodiscard]] bool is_adjacent(const vertex_id_type& u, const vertex_id_type& v) const {
-			return adj_matrix_ref(u, v);
+		[[nodiscard]] bool is_adjacent(vertex_id_type u, vertex_id_type v) const {
+			bool value = adj_matrix_ref(u, v);
+			return value;
 		}
 
 		[[nodiscard]] auto all_edges() const {
@@ -93,14 +94,14 @@ namespace g2x {
 			return edges;
 		}
 
-		void add_edge(const vertex_id_type& u, const vertex_id_type& v) {
+		void add_edge(vertex_id_type u, vertex_id_type v) {
 			adj_matrix_ref(u, v) = true;
 			if constexpr (not IsDirected) {
 				adj_matrix_ref(v, u) = true;
 			}
 		}
 
-		void remove_edge(const vertex_id_type& u, const vertex_id_type& v) {
+		void remove_edge(vertex_id_type u, vertex_id_type v) {
 			adj_matrix_ref(u, v) = false;
 			if constexpr (not IsDirected) {
 				adj_matrix_ref(v, u) = false;

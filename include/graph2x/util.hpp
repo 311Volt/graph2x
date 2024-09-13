@@ -86,7 +86,7 @@ namespace g2x {
 		}
 
 		array_2d(idx_t width, idx_t height, T value) : array_2d(width, height) {
-			std::fill(data_.begin(), data_.end(), value);
+			data_ = decltype(data_)(width * height, value);
 		}
 
 		[[nodiscard]] idx_t width() const {
@@ -97,22 +97,22 @@ namespace g2x {
 			return height_;
 		}
 
-		auto&& operator[](this auto&& self, idx_t x, idx_t y) {
+		decltype(auto) operator[](this auto&& self, idx_t x, idx_t y) {
 #ifdef GRAPH2X_DEBUG
 			bounds_check(x, y);
 #endif
 			return self.access(x, y);
 		}
 
-		auto&& operator[](this auto&& self, const std::pair<idx_t, idx_t>& idx) {
+		decltype(auto) operator[](this auto&& self, const std::pair<idx_t, idx_t>& idx) {
 #ifdef GRAPH2X_DEBUG
 			bounds_check(x, y);
 #endif
 			return self.access(idx.first, idx.second);
 		}
 
-		auto&& at(this auto&& self, idx_t x, idx_t y) {
-			bounds_check(x, y);
+		decltype(auto) at(this auto&& self, idx_t x, idx_t y) {
+			self.bounds_check(x, y);
 			return self.access(x, y);
 		}
 
@@ -150,14 +150,12 @@ namespace g2x {
 		int width_ = 0, height_ = 0;
 		std::vector<T> data_;
 
-		auto&& access(this auto&& self, idx_t x, idx_t y) {
-			bool is_bool = std::same_as<T, bool>;
+		decltype(auto) access(this auto&& self, idx_t x, idx_t y) {
 			auto offset = y * self.width() + x;
-			auto&& ret = self.data_[offset];
-			return std::forward<decltype(ret)>(ret);
+			return self.data_[offset];
 		}
 
-		void bounds_check(idx_t x, idx_t y) {
+		void bounds_check(idx_t x, idx_t y) const {
 			if(x < 0 || x >= width() || y < 0 || y >= height()) {
 				throw std::out_of_range(std::format(
 					"element ({},{}) is out of bounds of this {}x{} 2d array",
