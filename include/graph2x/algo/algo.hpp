@@ -3,7 +3,7 @@
 #define GRAPH2X_ALGO_HPP_4D6D6EC46344481085E2294A07606737
 
 #include "bip_matchings.hpp"
-#include "matchings_3regular.hpp"
+#include "matching_reductions.hpp"
 #include "search.hpp"
 
 #endif //GRAPH2X_ALGO_HPP_4D6D6EC46344481085E2294A07606737

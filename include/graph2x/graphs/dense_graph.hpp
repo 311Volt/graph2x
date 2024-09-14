@@ -52,7 +52,7 @@ namespace g2x {
 				if(u < 0 || u >= num_vertices.value() || v < 0 || v >= num_vertices.value()) {
 					throw std::out_of_range(std::format("invalid edge ({}, {}) in a {}-vertex graph", u, v, num_vertices.value()));
 				}
-				add_edge(u, v);
+				create_edge(u, v);
 			}
 		}
 
@@ -94,18 +94,22 @@ namespace g2x {
 			return edges;
 		}
 
-		void add_edge(vertex_id_type u, vertex_id_type v) {
+		edge_id_type create_edge(vertex_id_type u, vertex_id_type v) {
 			adj_matrix_ref(u, v) = true;
 			if constexpr (not IsDirected) {
 				adj_matrix_ref(v, u) = true;
 			}
+			return {u, v};
 		}
 
-		void remove_edge(vertex_id_type u, vertex_id_type v) {
+		bool remove_edge(edge_id_type eid) {
+			const auto& [u, v] = eid;
+			bool r = adj_matrix_ref(u, v);
 			adj_matrix_ref(u, v) = false;
 			if constexpr (not IsDirected) {
 				adj_matrix_ref(v, u) = false;
 			}
+			return r;
 		}
 
 		[[nodiscard]] const auto& adjacency_matrix() const {

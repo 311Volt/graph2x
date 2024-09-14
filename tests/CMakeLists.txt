@@ -6,6 +6,7 @@ add_executable(Google_Tests_run
 		edges.cpp
 		graph_generators.cpp
 		tests_common.hpp
+		matching_reductions.cpp
 )
 
 option(GRAPH2X_TESTS_UNITY_BUILD "Enables unity builds for unit tests" ON)

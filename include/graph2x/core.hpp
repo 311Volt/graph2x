@@ -322,6 +322,13 @@ namespace g2x {
 		});
 	}
 
+	auto indices(auto&& edge_range) {
+		return std::views::all(std::forward<decltype(edge_range)>(edge_range)) | std::views::transform([](auto&& edge) {
+			const auto& [u, v, i] = edge;
+			return i;
+		});
+	}
+
 	auto simplified(auto&& edge_range)
 		requires edge_value_c<std::remove_cvref_t<std::ranges::range_value_t<decltype(edge_range)>>>
 	{
@@ -672,6 +679,14 @@ namespace g2x {
 	}
 
 	/*
+	 * Creates an edge between two vertices in a graph and returns its index.
+	 */
+	template<typename GraphRefT>
+	auto create_edge(GraphRefT&& graph, vertex_id_t<GraphRefT> u, vertex_id_t<GraphRefT> v) -> edge_id_t<GraphRefT> {
+		return graph.create_edge(u, v);
+	}
+
+	/*
 	 * Creates a vertex in a graph with a given index, which is returned.
 	 */
 	template<typename GraphRefT>
@@ -703,27 +718,6 @@ namespace g2x {
 		return graph.remove_edge(e);
 	}
 
-	template<typename GraphT>
-	auto create_graph(std::ranges::forward_range auto&& edge_range) {
-		if constexpr (requires {GraphT(edge_range);}) {
-			return GraphT{std::forward<decltype(edge_range)>(edge_range)};
-		} else {
-			vertex_id_t<GraphT> max_v {};
-			for(const auto& [u, v]: edge_range) {
-				max_v = std::max(max_v, v);
-			}
-			return GraphT{max_v+1, std::forward<decltype(edge_range)>(edge_range)};
-		}
-	}
-
-	template<typename GraphT>
-	auto create_graph(isize num_vertices, std::ranges::forward_range auto&& edge_range) {
-		if constexpr (requires {GraphT(num_vertices, edge_range);}) {
-			return GraphT{num_vertices, std::forward<decltype(edge_range)>(edge_range)};
-		} else {
-			return GraphT{std::forward<decltype(edge_range)>(edge_range)};
-		}
-	}
 
 	namespace detail {
 		
@@ -797,7 +791,7 @@ namespace g2x {
 		template<typename GraphT>
 		struct supports_vertex_creation {
 			static constexpr bool value = requires(GraphT graph) {
-				create_vertex(graph);
+				{graph.create_vertex()} -> std::convertible_to<vertex_id_t<GraphT>>;
 			};
 		};
 		template<typename GraphT>
@@ -808,7 +802,7 @@ namespace g2x {
 		template<typename GraphT>
 		struct supports_vertex_addition {
 			static constexpr bool value = requires(GraphT graph, vertex_id_t<GraphT> v) {
-				add_vertex(graph, v);
+				{graph.add_vertex(v)} -> std::convertible_to<vertex_id_t<GraphT>>;
 			};
 		};
 
@@ -820,7 +814,7 @@ namespace g2x {
 		template<typename GraphT>
 		struct supports_vertex_deletion {
 			static constexpr bool value = requires(GraphT graph, vertex_id_t<GraphT> v) {
-				delete_vertex(graph, v);
+				{graph.remove_vertex(v)} -> std::convertible_to<bool>;
 			};
 		};
 
@@ -830,7 +824,7 @@ namespace g2x {
 		template<typename GraphT>
 		struct supports_edge_creation {
 			static constexpr bool value = requires(GraphT graph, vertex_id_t<GraphT> v) {
-				create_edge(graph, v, v);
+				{graph.create_edge(v, v)} -> std::convertible_to<edge_id_t<GraphT>>;
 			};
 		};
 		template<typename GraphT>
@@ -841,7 +835,7 @@ namespace g2x {
 		template<typename GraphT>
 		struct supports_edge_addition {
 			static constexpr bool value = requires(GraphT graph, vertex_id_t<GraphT> v, edge_id_t<GraphT> e) {
-				add_edge(graph, v, v, e);
+				{graph.add_edge(v, v, e)} -> std::convertible_to<edge_id_t<GraphT>>;
 			};
 		};
 
@@ -853,7 +847,7 @@ namespace g2x {
 		template<typename GraphT>
 		struct supports_edge_deletion {
 			static constexpr bool value = requires(GraphT graph, edge_id_t<GraphT> e) {
-				delete_edge(graph, e);
+				{graph.remove_edge(e)} -> std::convertible_to<bool>;
 			};
 		};
 
@@ -862,6 +856,44 @@ namespace g2x {
 
 
 
+	}
+
+
+
+	template<typename GraphT>
+	auto create_graph(std::ranges::forward_range auto&& edge_range) {
+		if constexpr (requires {GraphT(edge_range);}) {
+			return GraphT{std::forward<decltype(edge_range)>(edge_range)};
+		} else {
+			vertex_id_t<GraphT> max_v {};
+			for(const auto& [u, v]: edge_range) {
+				max_v = std::max(max_v, v+1);
+			}
+			return GraphT{max_v, std::forward<decltype(edge_range)>(edge_range)};
+		}
+	}
+
+	template<typename GraphT>
+	auto create_graph() {
+		using vid_t = vertex_id_t<GraphT>;
+		return create_graph<GraphT>(std::vector<std::pair<vid_t, vid_t>>{});
+	}
+
+	template<typename GraphT>
+	auto create_graph(isize num_vertices, std::ranges::forward_range auto&& edge_range) {
+		if constexpr (requires {GraphT(num_vertices, edge_range);}) {
+			return GraphT{num_vertices, std::forward<decltype(edge_range)>(edge_range)};
+		} else {
+			return GraphT{std::forward<decltype(edge_range)>(edge_range)};
+		}
+	}
+
+	template<typename GraphT>
+	auto create_graph(graph auto&& graph) {
+		return create_graph<GraphT>(
+			num_vertices(std::forward<decltype(graph)>(graph)),
+			all_edges_unindexed(std::forward<decltype(graph)>(graph))
+		);
 	}
 
 	using vertex_count = std::optional<int>;

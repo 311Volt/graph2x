@@ -156,7 +156,8 @@ namespace g2x {
 		}
 		
 		[[nodiscard]] auto all_edges() const {
-			return edge_storage | std::views::filter([this](edge_value_type e){return is_edge_unique(e);});
+			return std::views::iota(edge_id_type(0), edge_id_type(num_edges()))
+				| std::views::transform([this](edge_id_type e) {return edge_at(e);});
 		}
 
 	};

@@ -44,7 +44,7 @@ namespace g2x {
 		explicit general_dynamic_graph(std::ranges::forward_range auto&& edges) {
 
 			for(const auto& [u, v]: edges) {
-				add_edge(u, v);
+				create_edge(u, v);
 			}
 
 		}
@@ -113,7 +113,7 @@ namespace g2x {
 			return true;
 		}
 
-		auto add_edge(vertex_id_type u, vertex_id_type v) {
+		auto create_edge(vertex_id_type u, vertex_id_type v) {
 			auto edge_id = edge_id_counter++;
 			add_vertex(u);
 			add_vertex(v);
@@ -125,7 +125,10 @@ namespace g2x {
 			return edge_id;
 		}
 
-		void remove_edge(edge_id_type eid) {
+		bool remove_edge(edge_id_type eid) {
+			if(not edges_.contains(eid)) {
+				return false;
+			}
 			const auto& [u, v, i] = edge_at(eid);
 			{
 				auto [beg, end] = out_adj_index_[u].equal_range(v);
@@ -142,6 +145,7 @@ namespace g2x {
 				}
 			}
 			edges_.erase(eid);
+			return true;
 		}
 
 

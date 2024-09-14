@@ -10,8 +10,10 @@ namespace g2x {
 
 	/*
 	 * Like general_basic_graph, but can be constructed in linear time,
-	 * at the cost of contiguous storage of adjacency information.
-	 * New edges and vertices may be added.
+	 * at the cost of contiguity and ordering of adjacency information.
+	 * Traversal may be slightly slower due to reduced memory locality.
+	 *
+	 * Additionally, new edges and vertices may be created in amortized constant-time.
 	 */
 
 	template<typename VIdxT, std::integral EIdxT = int, bool IsDirected = false>

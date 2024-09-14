@@ -24,6 +24,11 @@ namespace g2x {
 		static constexpr bool outgoing_edges_uv_sorted = false;
 		static constexpr bool outgoing_edges_pre_swapped = true;
 
+		general_dynamic_list_graph(const general_dynamic_list_graph&) = delete;
+		general_dynamic_list_graph& operator=(const general_dynamic_list_graph&) = delete;
+		general_dynamic_list_graph(general_dynamic_list_graph&&) = default;
+		general_dynamic_list_graph& operator=(general_dynamic_list_graph&&) = default;
+
 		general_dynamic_list_graph(isize num_vertices, std::ranges::forward_range auto&& edges) {
 			for(isize i=0; i<num_vertices; i++) {
 				create_vertex();
@@ -48,14 +53,14 @@ namespace g2x {
 
 		[[nodiscard]] auto all_edges() {
 			return std::views::all(active_edges_)
-				| std::views::transform([&](edge_id_type eid) {
+				| std::views::transform([this](edge_id_type eid) {
 					return edge_at(eid);
 				});
 		}
 
 
 		[[nodiscard]] auto&& edge_at(edge_id_type eid) const {
-			return *edge_index_[eid]->out_edge_iter;
+			return *edge_index_.at(eid).value().out_edge_iter;
 		}
 
 		[[nodiscard]] auto outgoing_edges(vertex_id_type v) const {
@@ -110,11 +115,11 @@ namespace g2x {
 			--num_vertices_;
 		}
 
-		void remove_edge(edge_id_type eid) {
+		bool remove_edge(edge_id_type eid) {
 			if(not is_edge_valid(eid)) {
-				throw std::invalid_argument("cannot remove invalid edge");
+				return false;
 			}
-			auto [it1, it2, eit] = edge_index_.at(eid);
+			auto [it1, it2, eit] = edge_index_.at(eid).value();
 			const auto& [v1, v2, i] = *it1;
 
 			std::list<edge_value_type>& out_list = out_adj_lists_.at(v1);
@@ -130,6 +135,7 @@ namespace g2x {
 			active_edges_.erase(eit);
 			edge_index_.at(eid) = std::nullopt;
 			--num_edges_;
+			return true;
 		}
 
 
@@ -145,6 +151,16 @@ namespace g2x {
 				return false;
 			}
 			return edge_index_[eid].has_value();
+		}
+
+		template<typename T>
+		[[nodiscard]] auto create_vertex_labeling() const {
+			return std::vector<T>(vertex_index_.size());
+		}
+
+		template<typename T>
+		[[nodiscard]] auto create_edge_labeling() const {
+			return std::vector<T>(edge_index_.size());
 		}
 
 	private:

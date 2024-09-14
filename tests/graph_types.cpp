@@ -252,6 +252,36 @@ namespace {
 		}
 	}
 
+	TYPED_TEST(graph_types, create_edge) {
+		if constexpr (g2x::graph_traits::supports_edge_creation_v<TypeParam>) {
+			auto graph = g2x::create_graph<TypeParam>(edge_list{
+				{0,1}, {0,2}, {1,3},
+			});
+			EXPECT_EQ(g2x::degree(graph, 0), 2);
+			g2x::create_edge(graph, 0, 3);
+			EXPECT_EQ(g2x::degree(graph, 0), 3);
+		} else {
+			GTEST_SKIP();
+		}
+
+	}
+
+	TYPED_TEST(graph_types, remove_edge) {
+		if constexpr (g2x::graph_traits::supports_edge_deletion_v<TypeParam>) {
+			auto graph = g2x::create_graph<TypeParam>(edge_list{
+				{0,1}, {0,2}, {1,3},
+			});
+			EXPECT_EQ(g2x::degree(graph, 0), 2);
+			for(const auto& [u, v, i]: g2x::outgoing_edges(graph, 0)) {
+				g2x::remove_edge(graph, i);
+				break;
+			}
+			EXPECT_EQ(g2x::degree(graph, 0), 1);
+		} else {
+			GTEST_SKIP();
+		}
+
+	}
 
 	TYPED_TEST(graph_types, undirected_all_edges_should_not_yield_duplicates) {
 		if constexpr(g2x::graph_traits::is_directed_v<TypeParam> == false) {

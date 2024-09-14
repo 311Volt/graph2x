@@ -94,6 +94,7 @@ namespace g2x {
 
 
 		bool is_edge_set_matching(graph auto&& graph, edge_labeling_of<decltype(graph), bool> auto&& edge_set) {
+			//TODO O(n) version
 			std::set<vertex_id_t<decltype(graph)>> endpoints;
 			for(const auto& [u, v, i]: all_edges(graph)) {
 				if(not edge_set[i]) {
