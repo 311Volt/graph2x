@@ -17,6 +17,13 @@ namespace {
 		}
 	};
 
+	TEST(graph_generators, iota_random_subset_density) {
+		std::mt19937_64 rng(311);
+		int n = 1500;
+		auto n1 = std::ranges::distance(g2x::detail::iota_random_subset(1500, 0.1, rng));
+		EXPECT_LT(std::abs(n1 - 150), 20);
+	}
+
 	TEST(graph_generators, avg_deg_should_fall_within_tolerance) {
 		std::mt19937_64 rng(311);
 		average<double> avg_deg;

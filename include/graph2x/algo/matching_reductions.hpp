@@ -105,7 +105,7 @@ namespace g2x {
 		}
 
 		/*
-		 * Returns a pair (n, T, E), where:
+		 * Returns a tuple (n, T, E), where:
 		 *
 		 * n is the number of articulation points in the input graph
 		 *

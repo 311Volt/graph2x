@@ -21,7 +21,8 @@ namespace g2x {
 					run_length_left = isize(first_present),
 					skip_length_left = isize(not first_present),
 					run_distribution = std::geometric_distribution(1.0 - density),
-					skip_distribution = std::geometric_distribution(density)
+					skip_distribution = std::geometric_distribution(density),
+					density
 				]() mutable -> std::optional<isize>
 				{
 					if(skip_length_left) {
@@ -50,13 +51,12 @@ namespace g2x {
 		 */
 		inline std::pair<isize, isize> triangular_floor(isize n) {
 			static std::vector<isize> triangular_lookup(1, 0);
-			while(triangular_lookup.back() <= n*2) {
+
+			isize k_approx = std::floor(0.5 * (1.0 + std::sqrt(1.0 + 8.0*n))) - 1;
+
+			while(triangular_lookup.size() <= k_approx+2) {
 				triangular_lookup.push_back(triangular_lookup.back() + triangular_lookup.size());
 			}
-
-			double k_approx_f = 0.5 * (1.0 + std::sqrt(1.0 + 8.0*n));
-			isize k_approx = std::floor(0.5 * (1.0 + std::sqrt(1.0 + 8.0*n))) - 1;
-			k_approx = std::min<isize>(k_approx, triangular_lookup.size() - 1);
 
 			if(triangular_lookup[k_approx] <= n && triangular_lookup[k_approx+1] > n) {
 				return {isize(k_approx), triangular_lookup[k_approx]};
@@ -82,18 +82,16 @@ namespace g2x {
 
 
 		inline auto random_edges(isize num_vertices, double density, bool allow_loops, auto&& generator) {
-			std::vector<std::pair<int, int>> edges;
 			isize num_edges_complete = detail::complete_graph_num_edges(num_vertices, allow_loops);
-			edges.reserve(num_edges_complete*density);
 
-			for(const auto& edge_num: detail::iota_random_subset(num_edges_complete, density, generator)) {
-				const auto& [k, t_k] = detail::triangular_floor(edge_num);
-				int v = k + (not allow_loops);
-				int u = edge_num - t_k;
-				edges.emplace_back(u, v);
-			}
-
-			return edges;
+			return
+				detail::iota_random_subset(num_edges_complete, density, generator)
+				| std::views::transform([allow_loops](isize edge_num){
+					const auto& [k, t_k] = detail::triangular_floor(edge_num);
+					isize v = k + (not allow_loops);
+					isize u = edge_num - t_k;
+					return std::pair{u, v};
+				});
 		}
 
 		inline auto random_edges_card(isize num_vertices, isize num_edges, bool allow_loops, auto&& generator) {
@@ -114,13 +112,14 @@ namespace g2x {
 			isize num_edges_complete = v1*v2;
 			edges.reserve(num_edges_complete*density);
 
-			for(const auto& edge_num: detail::iota_random_subset(num_edges_complete, density, generator)) {
-				int u = edge_num / v2;
-				int v = edge_num % v2 + v1;
-				edges.emplace_back(u, v);
-			}
+			return
+				detail::iota_random_subset(num_edges_complete, density, generator)
+				| std::views::transform([v1, v2](isize edge_num){
+					isize u = edge_num / v2;
+					isize v = edge_num % v2 + v1;
+					return std::pair{u, v};
+				});
 
-			return edges;
 		}
 
 		inline auto random_edges_bipartite_card(int v1, int v2, int num_edges, auto&& generator) {

@@ -867,7 +867,7 @@ namespace g2x {
 		} else {
 			vertex_id_t<GraphT> max_v {};
 			for(const auto& [u, v]: edge_range) {
-				max_v = std::max(max_v, v+1);
+				max_v = std::max<vertex_id_t<GraphT>>(max_v, v+1);
 			}
 			return GraphT{max_v, std::forward<decltype(edge_range)>(edge_range)};
 		}
