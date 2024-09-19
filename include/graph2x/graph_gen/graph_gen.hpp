@@ -21,8 +21,7 @@ namespace g2x {
 					run_length_left = isize(first_present),
 					skip_length_left = isize(not first_present),
 					run_distribution = std::geometric_distribution(1.0 - density),
-					skip_distribution = std::geometric_distribution(density),
-					density
+					skip_distribution = std::geometric_distribution(density)
 				]() mutable -> std::optional<isize>
 				{
 					if(skip_length_left) {
@@ -44,6 +43,13 @@ namespace g2x {
 					}
 				}
 			);
+		}
+
+		inline auto iota_random_combination(isize bound, isize samples, auto&& generator) {
+			auto iota_view = std::views::iota(0, bound);
+			std::vector<isize> combination(samples);
+			std::ranges::sample(iota_view, combination.begin(), samples, generator);
+			return combination;
 		}
 
 		/*
@@ -81,7 +87,7 @@ namespace g2x {
 
 
 
-		inline auto random_edges(isize num_vertices, double density, bool allow_loops, auto&& generator) {
+		inline auto edge_probability_generator(isize num_vertices, double density, bool allow_loops, auto&& generator) {
 			isize num_edges_complete = detail::complete_graph_num_edges(num_vertices, allow_loops);
 
 			return
@@ -94,20 +100,8 @@ namespace g2x {
 				});
 		}
 
-		inline auto random_edges_card(isize num_vertices, isize num_edges, bool allow_loops, auto&& generator) {
-			isize num_edges_complete = detail::complete_graph_num_edges(num_vertices, allow_loops);
-			double density = num_edges / num_edges_complete;
-			return random_edges(num_vertices, density, allow_loops, generator);
-		}
 
-		inline auto random_edges_deg(isize num_vertices, double avg_deg, bool allow_loops, auto&& generator) {
-			isize num_edges_complete = detail::complete_graph_num_edges(num_vertices, allow_loops);
-			double density = avg_deg * num_vertices / (2.0f*num_edges_complete);
-			return random_edges(num_vertices, density, allow_loops, generator);
-		}
-
-
-		inline auto random_edges_bipartite(isize v1, isize v2, double density, auto&& generator) {
+		inline auto edge_probability_bipartite_generator(isize v1, isize v2, double density, auto&& generator) {
 			std::vector<std::pair<int, int>> edges;
 			isize num_edges_complete = v1*v2;
 			edges.reserve(num_edges_complete*density);
@@ -122,15 +116,67 @@ namespace g2x {
 
 		}
 
-		inline auto random_edges_bipartite_card(int v1, int v2, int num_edges, auto&& generator) {
-			double density = num_edges / (1.0f*v1*v2);
-			return random_edges_bipartite(v1, v2, density, generator);
+		inline auto edge_cardinality_generator(isize num_vertices, isize num_edges, bool allow_loops, auto&& generator) {
+			isize num_edges_complete = detail::complete_graph_num_edges(num_vertices, allow_loops);
+
+			return
+				detail::iota_random_combination(num_edges_complete, num_edges, generator)
+				| std::views::transform([allow_loops](isize edge_num){
+					const auto& [k, t_k] = detail::triangular_floor(edge_num);
+					isize v = k + (not allow_loops);
+					isize u = edge_num - t_k;
+					return std::pair{u, v};
+				});
 		}
 
-		inline auto random_edges_bipartite_deg(int v1, int v2, double avg_deg, auto&& generator) {
-			double density = avg_deg * (v1+v2) / (2.0f*v1*v2);
-			return random_edges_bipartite(v1, v2, density, generator);
+
+		inline auto edge_cardinality_bipartite_generator(isize v1, isize v2, isize num_edges, auto&& generator) {
+			isize num_edges_complete = v1*v2;
+
+			return
+				detail::iota_random_combination(num_edges_complete, num_edges, generator)
+				| std::views::transform([v1, v2](isize edge_num){
+					isize u = edge_num / v2;
+					isize v = edge_num % v2 + v1;
+					return std::pair{u, v};
+				});
+
 		}
+
+		inline auto average_degree_generator(isize num_vertices, double avg_deg, bool allow_loops, auto&& generator) {
+			isize num_edges = avg_deg*num_vertices / 2.0;
+			return edge_cardinality_generator(num_vertices, num_edges, allow_loops, generator);
+		}
+
+		inline auto average_degree_bipartite_generator(isize v1, isize v2, double avg_deg, auto&& generator) {
+			isize num_edges = avg_deg*(v1+v2) / 2.0;
+			return edge_cardinality_bipartite_generator(v1, v2, num_edges, generator);
+		}
+
+
+
+
+		// inline auto random_edges_card(isize num_vertices, isize num_edges, bool allow_loops, auto&& generator) {
+		// 	isize num_edges_complete = detail::complete_graph_num_edges(num_vertices, allow_loops);
+		// 	double density = num_edges / num_edges_complete;
+		// 	return random_edges(num_vertices, density, allow_loops, generator);
+		// }
+		//
+		// inline auto random_edges_deg(isize num_vertices, double avg_deg, bool allow_loops, auto&& generator) {
+		// 	isize num_edges_complete = detail::complete_graph_num_edges(num_vertices, allow_loops);
+		// 	double density = avg_deg * num_vertices / (2.0f*num_edges_complete);
+		// 	return random_edges(num_vertices, density, allow_loops, generator);
+		// }
+		//
+		// inline auto random_edges_bipartite_card(int v1, int v2, int num_edges, auto&& generator) {
+		// 	double density = num_edges / (1.0f*v1*v2);
+		// 	return random_edges_bipartite(v1, v2, density, generator);
+		// }
+		//
+		// inline auto random_edges_bipartite_deg(int v1, int v2, double avg_deg, auto&& generator) {
+		// 	double density = avg_deg * (v1+v2) / (2.0f*v1*v2);
+		// 	return random_edges_bipartite(v1, v2, density, generator);
+		// }
 
 	}
 

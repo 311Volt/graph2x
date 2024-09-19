@@ -93,9 +93,9 @@ namespace g2x {
 
 				counted_num_vertices = std::max<isize>(counted_num_vertices, std::max(vtx1, vtx2));
 
-				edge_storage.push_back({vtx1, vtx2, num_edges});
+				edge_storage.push_back({EIdxT(vtx1), EIdxT(vtx2), num_edges});
 				if(not IsDirected && vtx1 != vtx2) {
-					edge_storage.push_back({vtx2, vtx1, num_edges});
+					edge_storage.push_back({EIdxT(vtx2), EIdxT(vtx1), num_edges});
 				}
 				++num_edges;
 			}

@@ -9,7 +9,7 @@ int main() {
 		{4, 5}
 	});
 
-	auto distances = g2x::create_vertex_labeling<int>(graph, -1);
+	auto distances = g2x::create_vertex_property<int>(graph, -1);
 	distances[0] = 0;
 
 	for(const auto& [u, v, i]: g2x::algo::simple_edges_bfs(graph, 0)) {

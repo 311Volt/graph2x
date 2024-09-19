@@ -8,7 +8,7 @@ namespace {
 		std::println("random_seed = {}", random_seed);
 		std::mt19937_64 rng(random_seed);
 
-		auto graph = g2x::create_graph<g2x::basic_graph>(g2x::graph_gen::random_edges_bipartite_deg(v, v, d, rng));
+		auto graph = g2x::create_graph<g2x::basic_graph>(g2x::graph_gen::average_degree_bipartite_generator(v, v, d, rng));
 		return graph;
 	}
 
@@ -65,7 +65,7 @@ namespace {
 		EXPECT_TRUE(g2x::algo::is_edge_set_matching(graph, g2x::algo::max_bipartite_matching(graph)));
 		EXPECT_TRUE(g2x::algo::is_edge_set_maximum_matching(graph, g2x::algo::max_bipartite_matching(graph)));
 
-		auto matching = g2x::create_edge_labeling<g2x::boolean>(graph, false);
+		auto matching = g2x::create_edge_property<g2x::boolean>(graph, false);
 		auto reduced_matching = g2x::algo::max_bipartite_matching(reduced_graph);
 
 		g2x::algo::transfer_matching(graph, matching, reduced_matching, reduction_steps);

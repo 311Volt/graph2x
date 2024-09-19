@@ -219,7 +219,7 @@ struct std::hash<g2x::simplified_edge_value<VtxIdT, IsDirected>> {
 
 namespace g2x {
 
-	namespace graph_traits {
+	inline namespace graph_traits {
 
 		template<typename GraphT>
 		struct is_directed {
@@ -322,6 +322,20 @@ namespace g2x {
 		});
 	}
 
+	auto source_vertices(auto&& edge_range) {
+		return std::views::all(std::forward<decltype(edge_range)>(edge_range)) | std::views::transform([](auto&& edge) {
+			const auto& [u, v, i] = edge;
+			return u;
+		});
+	}
+
+	auto target_vertices(auto&& edge_range) {
+		return std::views::all(std::forward<decltype(edge_range)>(edge_range)) | std::views::transform([](auto&& edge) {
+			const auto& [u, v, i] = edge;
+			return v;
+		});
+	}
+
 	auto indices(auto&& edge_range) {
 		return std::views::all(std::forward<decltype(edge_range)>(edge_range)) | std::views::transform([](auto&& edge) {
 			const auto& [u, v, i] = edge;
@@ -339,6 +353,13 @@ namespace g2x {
 		});
 	}
 
+	auto simplified(auto&& edge_range)
+		requires simplified_edge_value_c<std::remove_cvref_t<std::ranges::range_value_t<decltype(edge_range)>>>
+	{
+		return std::views::all(std::forward<decltype(edge_range)>(edge_range));
+	}
+
+
 	auto transposed(auto&& edge_range)
 	{
 		using edge_t = std::remove_cvref_t<std::ranges::range_value_t<decltype(edge_range)>>;
@@ -351,13 +372,6 @@ namespace g2x {
 			}
 		});
 	}
-
-	auto simplified(auto&& edge_range)
-		requires simplified_edge_value_c<std::remove_cvref_t<std::ranges::range_value_t<decltype(edge_range)>>>
-	{
-		return std::views::all(std::forward<decltype(edge_range)>(edge_range));
-	}
-
 
 	template<typename GraphRefT>
 	using edge_t = typename std::remove_cvref_t<GraphRefT>::edge_value_type;
@@ -376,23 +390,6 @@ namespace g2x {
 		return std::views::all(graph.all_vertices());
 	}
 
-	/*
-	 * Returns the range consisting of all edges in the graph, viewed as tuple-likes
-	 * [src_vertex, dst_vertex, index].
-	 */
-	template<typename GraphRefT>
-	auto all_edges(GraphRefT&& graph) {
-		return std::views::all(graph.all_edges());
-	}
-
-	/*
-	 * Returns the range consisting of all edges in the graph, viewed as tuple-likes
-	 * [src_vertex, dst_vertex].
-	 */
-	template<typename GraphRefT>
-	auto all_edges_unindexed(GraphRefT&& graph) {
-		return unindexed(all_edges(graph));
-	}
 
 	/*
 	 * Returns a range of all edges that are outgoing from v, viewed as tuple-likes
@@ -448,6 +445,31 @@ namespace g2x {
 				return edge.swap_to_second(v);
 			});
 		}
+	}
+
+
+	/*
+	 * Returns the range consisting of all edges in the graph, viewed as tuple-likes
+	 * [src_vertex, dst_vertex, index].
+	 */
+	template<typename GraphRefT>
+	auto all_edges(GraphRefT&& graph) {
+		if constexpr(requires{graph.all_edges();}) {
+			return std::views::all(graph.all_edges());
+		} else {
+			return all_vertices(graph)
+				| std::views::transform([&graph](auto vtx) {return outgoing_edges(graph, vtx);})
+				| std::views::join;
+		}
+	}
+
+	/*
+	 * Returns the range consisting of all edges in the graph, viewed as tuple-likes
+	 * [src_vertex, dst_vertex].
+	 */
+	template<typename GraphRefT>
+	auto all_edges_unindexed(GraphRefT&& graph) {
+		return unindexed(all_edges(graph));
 	}
 
 	/*
@@ -603,9 +625,9 @@ namespace g2x {
 	 * owned by 'vl'. The initial value of such objects is unspecified.
 	 */
 	template<typename T, typename GraphRefT>
-	auto create_vertex_labeling(GraphRefT&& graph) {
-		if constexpr (requires{graph.template create_vertex_labeling<T>();}) {
-			return graph.template create_vertex_labeling<T>();
+	auto create_vertex_property(GraphRefT&& graph) {
+		if constexpr (requires{graph.template create_vertex_property<T>();}) {
+			return graph.template create_vertex_property<T>();
 		} else if constexpr (graph_traits::has_natural_vertex_numbering_v<std::remove_cvref_t<GraphRefT>>) {
 			return std::vector<T>(num_vertices(graph));
 		} else if constexpr (requires{std::unordered_map<vertex_id_t<GraphRefT>, T>{};}) {
@@ -621,8 +643,8 @@ namespace g2x {
 	 * owned by 'vl'. The initial value of all such objects is equivalent to "value".
 	 */
 	template<typename T, typename GraphRefT>
-	auto create_vertex_labeling(GraphRefT&& graph, const T& value) {
-		auto labeling = create_vertex_labeling<T>(graph);
+	auto create_vertex_property(GraphRefT&& graph, const T& value) {
+		auto labeling = create_vertex_property<T>(graph);
 		if constexpr (std::ranges::contiguous_range<decltype(labeling)>) {
 			std::ranges::fill(labeling, value);
 		} else {
@@ -639,9 +661,9 @@ namespace g2x {
 	 * owned by 'el'. The initial value of such objects is not specified.
 	 */
 	template<typename T, typename GraphRefT>
-	auto create_edge_labeling(GraphRefT&& graph) {
-		if constexpr (requires{graph.template create_edge_labeling<T>();}) {
-			return graph.template create_edge_labeling<T>();
+	auto create_edge_property(GraphRefT&& graph) {
+		if constexpr (requires{graph.template create_edge_property<T>();}) {
+			return graph.template create_edge_property<T>();
 		} else if constexpr (graph_traits::has_natural_edge_numbering_v<std::remove_cvref_t<GraphRefT>>) {
 			return std::vector<T>(num_edges(graph));
 		} else if constexpr (requires{std::unordered_map<edge_id_t<GraphRefT>, T>{};}) {
@@ -657,8 +679,8 @@ namespace g2x {
 	 * owned by 'el'. The initial value of such objects is equivalent to "value".
 	 */
 	template<typename T, typename GraphRefT>
-	auto create_edge_labeling(GraphRefT&& graph, const T& value) {
-		auto labeling = create_edge_labeling<T>(graph);
+	auto create_edge_property(GraphRefT&& graph, const T& value) {
+		auto labeling = create_edge_property<T>(graph);
 		if constexpr (std::ranges::contiguous_range<decltype(labeling)>) {
 			std::ranges::fill(labeling, value);
 		} else {
@@ -752,23 +774,23 @@ namespace g2x {
 
 
 	template<typename T, typename GraphRefT>
-	concept vertex_labeling = requires(T lc, vertex_id_t<GraphRefT> v) {
+	concept vertex_property = requires(T lc, vertex_id_t<GraphRefT> v) {
 		{lc[v]};
 	};
 
 	template<typename T, typename GraphRefT>
-	concept edge_labeling = requires(T lc, edge_id_t<GraphRefT> v) {
+	concept edge_property = requires(T lc, edge_id_t<GraphRefT> v) {
 		{lc[v]};
 	};
 
 
 	template<typename T, typename GraphRefT, typename ValueT>
-	concept vertex_labeling_of = requires(T lc, vertex_id_t<GraphRefT> v) {
+	concept vertex_property_of = requires(T lc, vertex_id_t<GraphRefT> v) {
 		{lc[v]} -> std::convertible_to<ValueT>;
 	};
 
 	template<typename T, typename GraphRefT, typename ValueT>
-	concept edge_labeling_of = requires(T lc, edge_id_t<GraphRefT> v) {
+	concept edge_property_of = requires(T lc, edge_id_t<GraphRefT> v) {
 		{lc[v]} -> std::convertible_to<ValueT>;
 	};
 	
@@ -782,11 +804,11 @@ namespace g2x {
 		{all_vertices(graph)} -> detail::range_of_vertices_for<T>;
 		{all_edges(graph)} -> detail::range_of_edges_for<T>;
 		{edge_at(graph, e)} -> std::convertible_to<edge_t<T>>;
-		{create_vertex_labeling<int>(graph, 0)} -> vertex_labeling<T>;
-		{create_edge_labeling<int>(graph, 0)} -> edge_labeling<T>;
+		{create_vertex_property<int>(graph, 0)} -> vertex_property<T>;
+		{create_edge_property<int>(graph, 0)} -> edge_property<T>;
 	};
 
-	namespace graph_traits {
+	inline namespace graph_traits {
 
 		template<typename GraphT>
 		struct supports_vertex_creation {

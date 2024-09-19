@@ -45,7 +45,7 @@ double match_benchmark_sample(int numPartitionVertices, float avg_neigh) {
 
 	auto graph = g2x::basic_graph(
 		numPartitionVertices*2,
-		g2x::graph_gen::random_edges_bipartite_deg(
+		g2x::graph_gen::average_degree_bipartite_generator(
 			numPartitionVertices, numPartitionVertices,
 			avg_neigh, std::mt19937_64{std::random_device{}()}
 		)

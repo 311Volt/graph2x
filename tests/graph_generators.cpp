@@ -28,7 +28,7 @@ namespace {
 		std::mt19937_64 rng(311);
 		average<double> avg_deg;
 		for(int i=0; i<10; i++) {
-			auto edges = g2x::graph_gen::random_edges_deg(1000, 3.0, false, rng);
+			auto edges = g2x::graph_gen::average_degree_generator(1000, 3.0, false, rng);
 			g2x::nested_vec_graph graph(1000, edges);
 			for(const auto& v: g2x::all_vertices(graph)) {
 				avg_deg.add(g2x::degree(graph, v));

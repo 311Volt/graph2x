@@ -62,9 +62,9 @@ namespace g2x {
 
 			using vid_t = vertex_id_t<decltype(graph)>;
 
-			auto depths = create_vertex_labeling<int>(graph, -1);
-			auto lowpoints = create_vertex_labeling<int>(graph, -1);
-			auto visited = create_vertex_labeling<boolean>(graph, false);
+			auto depths = create_vertex_property<int>(graph, -1);
+			auto lowpoints = create_vertex_property<int>(graph, -1);
+			auto visited = create_vertex_property<boolean>(graph, false);
 			std::vector<vid_t> articulation_points;
 
 			for(const auto& root: all_vertices(graph)) {
@@ -113,7 +113,7 @@ namespace g2x {
 		 *    - vertices [0; n) represent articulation points
 		 *    - vertices [n; |V(T)|) represent blocks
 		 *
-		 * E is an edge labeling of T, where for each edge-id i in T
+		 * E is an edge property of T, where for each edge-id i in T
 		 * E[i] is an edge-id into 'graph' that corresponds to any one edge
 		 * that connects the corresponding block and articulation point.
 		 */
@@ -126,9 +126,9 @@ namespace g2x {
 
 			auto articulation_points = compute_articulation_points(graph);
 
-			auto is_articulation_point = create_vertex_labeling<boolean>(graph, false);
-			auto vertex_colors = create_vertex_labeling<vid_t>(graph);
-			auto edge_color_opts = create_edge_labeling<std::optional<vid_t>>(graph, std::nullopt);
+			auto is_articulation_point = create_vertex_property<boolean>(graph, false);
+			auto vertex_colors = create_vertex_property<vid_t>(graph);
+			auto edge_color_opts = create_edge_property<std::optional<vid_t>>(graph, std::nullopt);
 
 			depth_first_search dfs(graph, [&](auto&& edge) {
 				const auto& [u, v, i] = edge;
@@ -224,7 +224,7 @@ namespace g2x {
 			auto bcg = create_block_cut_graph(graph);
 			depth_first_search dfs(bcg.block_cut_graph);
 
-			auto reduced_to_first = create_vertex_labeling<boolean>(bcg.block_cut_graph, false);
+			auto reduced_to_first = create_vertex_property<boolean>(bcg.block_cut_graph, false);
 
 			for(const auto& root: all_vertices(bcg.block_cut_graph)) {
 				if(dfs.get_vertex_state(root) == vertex_search_state::visited) {

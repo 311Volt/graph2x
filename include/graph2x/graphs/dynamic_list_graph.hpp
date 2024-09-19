@@ -47,11 +47,11 @@ namespace g2x {
 			return num_edges_;
 		}
 
-		[[nodiscard]] auto all_vertices() {
+		[[nodiscard]] auto all_vertices() const {
 			return std::views::all(active_vertices_);
 		}
 
-		[[nodiscard]] auto all_edges() {
+		[[nodiscard]] auto all_edges() const {
 			return std::views::all(active_edges_)
 				| std::views::transform([this](edge_id_type eid) {
 					return edge_at(eid);

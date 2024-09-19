@@ -23,7 +23,7 @@ namespace g2x {
 
 		auto bipartite_decompose(graph auto&& graph) {
 			
-			auto labels = create_vertex_labeling<char>(graph, -1);
+			auto labels = create_vertex_property<char>(graph, -1);
 			
 			using result_type = std::optional<decltype(labels)>;
 			breadth_first_search bfs(graph);
@@ -51,8 +51,8 @@ namespace g2x {
 			requires graph<std::remove_cvref_t<GraphRefT>>
 		auto find_bipartite_augmenting_path(
 			GraphRefT&& graph,
-			edge_labeling_of<GraphRefT, char> auto&& partitions,
-			edge_labeling_of<GraphRefT, bool> auto&& matching
+			edge_property_of<GraphRefT, char> auto&& partitions,
+			edge_property_of<GraphRefT, bool> auto&& matching
 		) -> std::vector<edge_id_t<GraphRefT>>
 		{
 			auto edge_predicate = [&](auto&& edge) {
@@ -66,7 +66,7 @@ namespace g2x {
 
 			breadth_first_search bfs {graph, edge_predicate};
 
-			auto vtx_matched = create_vertex_labeling(graph, char(false));
+			auto vtx_matched = create_vertex_property(graph, char(false));
 
 			for(const auto& [u, v, i]: all_edges(graph)) {
 				if(matching[i]) {
@@ -93,7 +93,7 @@ namespace g2x {
 		}
 
 
-		bool is_edge_set_matching(graph auto&& graph, edge_labeling_of<decltype(graph), bool> auto&& edge_set) {
+		bool is_edge_set_matching(graph auto&& graph, edge_property_of<decltype(graph), bool> auto&& edge_set) {
 			//TODO O(n) version
 			std::set<vertex_id_t<decltype(graph)>> endpoints;
 			for(const auto& [u, v, i]: all_edges(graph)) {
@@ -109,7 +109,7 @@ namespace g2x {
 
 		bool is_edge_set_maximum_matching(
 			graph auto&& graph,
-			edge_labeling_of<decltype(graph), bool> auto&& edge_set
+			edge_property_of<decltype(graph), bool> auto&& edge_set
 		) {
 			auto partitions = bipartite_decompose(graph).value();
 			auto augpath = find_bipartite_augmenting_path(graph, partitions, edge_set);
@@ -171,8 +171,8 @@ namespace g2x {
 			 */
 			auto hopcroft_karp_bfs_stage(
 				graph auto&& graph,
-				edge_labeling_of<decltype(graph), bool> auto&& partitions,
-				edge_labeling_of<decltype(graph), bool> auto&& matching,
+				edge_property_of<decltype(graph), bool> auto&& partitions,
+				edge_property_of<decltype(graph), bool> auto&& matching,
 				int* out_aug_path_length
 			) {
 				auto edge_predicate = [&](auto&& edge) {
@@ -187,8 +187,8 @@ namespace g2x {
 				breadth_first_search bfs {graph, edge_predicate};
 				
 				
-				auto vtx_matched = create_vertex_labeling<boolean>(graph, false);
-				auto is_endpoint_candidate = create_vertex_labeling<boolean>(graph, false);
+				auto vtx_matched = create_vertex_property<boolean>(graph, false);
+				auto is_endpoint_candidate = create_vertex_property<boolean>(graph, false);
 				
 				for(const auto& [u, v, i]: all_edges(graph)) {
 					if(matching[i]) {
@@ -205,7 +205,7 @@ namespace g2x {
 				
 				int aug_path_length = std::numeric_limits<int>::max();
 				
-				auto bfs_layer = create_vertex_labeling(graph, -1);
+				auto bfs_layer = create_vertex_property(graph, -1);
 				while(auto v_opt = bfs.next_vertex()) {
 					auto v = *v_opt;
 					bfs.update_distances(v, bfs_layer);
@@ -257,10 +257,10 @@ namespace g2x {
 
 			bool hopcroft_karp_dfs_step(
 				graph auto&& graph,
-				edge_labeling_of<decltype(graph), bool> auto&& matching,
-				vertex_labeling_of<decltype(graph), int> auto&& bfs_levels,
-				vertex_labeling_of<decltype(graph), bool> auto&& endpoint_candidates,
-				vertex_labeling_of<decltype(graph), bool> auto&& used_vertices,
+				edge_property_of<decltype(graph), bool> auto&& matching,
+				vertex_property_of<decltype(graph), int> auto&& bfs_levels,
+				vertex_property_of<decltype(graph), bool> auto&& endpoint_candidates,
+				vertex_property_of<decltype(graph), bool> auto&& used_vertices,
 				vertex_id_t<decltype(graph)> start_vertex,
 				std::optional<edge_id_t<decltype(graph)>> source_edge,
 				std::output_iterator<edge_id_t<decltype(graph)>> auto& output_edges)
@@ -307,14 +307,14 @@ namespace g2x {
 
 			void hopcroft_karp_dfs_stage(
 				graph auto&& graph,
-				vertex_labeling_of<decltype(graph), int> auto&& bfs_levels,
+				vertex_property_of<decltype(graph), int> auto&& bfs_levels,
 				g2x::detail::range_of_vertices_for<decltype(graph)> auto&& start_vertices,
-				vertex_labeling_of<decltype(graph), bool> auto&& endpoint_candidates,
+				vertex_property_of<decltype(graph), bool> auto&& endpoint_candidates,
 				auto&& output_augmenting_set,
-				edge_labeling_of<decltype(graph), bool> auto&& matching)
+				edge_property_of<decltype(graph), bool> auto&& matching)
 			{
 				std::vector<edge_id_t<decltype(graph)>> augpath;
-				auto used_vertices = create_vertex_labeling<char>(graph, 0);
+				auto used_vertices = create_vertex_property<char>(graph, 0);
 
 
 				
@@ -329,7 +329,7 @@ namespace g2x {
 				auto start_vertices_vec = start_vertices | std::ranges::to<std::vector>();
 				using enum config::hk73_vertex_choice_strategy_t;
 				if(config::hopcroft_karp.vertex_choice_strategy == lowest_ranked_adj_edge_first) {
-					auto vertex_ratings = create_vertex_labeling<double>(graph, 9999.0);
+					auto vertex_ratings = create_vertex_property<double>(graph, 9999.0);
 					for(const auto& e: all_edges(graph)) {
 						const auto& [u, v, i] = e;
 						vertex_ratings[u] = std::min(vertex_ratings[u], rate_edge(graph, e));
@@ -376,8 +376,8 @@ namespace g2x {
 
 		auto find_bipartite_augmenting_set(
 			graph auto&& graph,
-			vertex_labeling_of<decltype(graph), char> auto&& partitions,
-			edge_labeling_of<decltype(graph), bool> auto&& matching
+			vertex_property_of<decltype(graph), char> auto&& partitions,
+			edge_property_of<decltype(graph), bool> auto&& matching
 		) {
 			
 			int aug_path_length = -1;
@@ -389,7 +389,7 @@ namespace g2x {
 			}
 			
 			std::vector<vertex_id_t<decltype(graph)>> start_vertices;
-			auto endpoint_candidates = create_vertex_labeling(graph, char(false));
+			auto endpoint_candidates = create_vertex_property(graph, char(false));
 			bool endpoint_candidates_exist = false;
 			
 			for(const auto& vtx: all_vertices(graph)) {
@@ -436,7 +436,7 @@ namespace g2x {
 		auto max_bipartite_matching(graph auto&& graph) {
 			
 			auto partitions = bipartite_decompose(graph).value();
-			auto matching = create_edge_labeling<boolean>(graph, false);
+			auto matching = create_edge_property<boolean>(graph, false);
 
 			insights::hopcroft_karp = {};
 			
@@ -459,8 +459,8 @@ namespace g2x {
 
 		auto greedy_maximal_matching(graph auto&& graph) {
 
-			auto matching = create_edge_labeling<boolean>(graph, false);
-			auto matched_vertices = create_vertex_labeling<boolean>(graph, false);
+			auto matching = create_edge_property<boolean>(graph, false);
+			auto matched_vertices = create_vertex_property<boolean>(graph, false);
 
 			for(const auto& u: all_vertices(graph)) {
 				for(const auto& [_, v, i]: outgoing_edges(graph, u)) {
@@ -481,14 +481,14 @@ namespace g2x {
 			insights::hopcroft_karp = {};
 
 			auto partitions = bipartite_decompose(graph).value();
-			auto matching = create_edge_labeling<boolean>(graph, false);
+			auto matching = create_edge_property<boolean>(graph, false);
 
-			auto bfs_levels = create_vertex_labeling<int>(graph, -1);
-			auto matched_vertices = create_vertex_labeling<boolean>(graph, false);
+			auto bfs_levels = create_vertex_property<int>(graph, -1);
+			auto matched_vertices = create_vertex_property<boolean>(graph, false);
 
 			std::vector<edge_id_t<decltype(graph)>> aug_set;
 			aug_set.reserve(num_vertices(graph));
-			auto aug_set_vtx_map = create_vertex_labeling<boolean>(graph, false);
+			auto aug_set_vtx_map = create_vertex_property<boolean>(graph, false);
 
 			std::vector<vertex_id_t<decltype(graph)>> augpath_begin_candidates;
 			augpath_begin_candidates.reserve(num_vertices(graph));

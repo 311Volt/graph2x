@@ -10,7 +10,7 @@ void render_bfsnet_to_tikz(std::ostream& os, auto&& graph, auto&& partitions, au
 	struct vec3f {
 		float x=0.f, y=0.f;
 	};
-	auto vtx_positions = g2x::create_vertex_labeling(graph, vec3f{});
+	auto vtx_positions = g2x::create_vertex_property(graph, vec3f{});
 	auto out_it = std::ostream_iterator<char>{os};
 
 	std::format_to(out_it, "\\tikz {{\n");
@@ -84,12 +84,12 @@ void render_bfsnet_to_tikz(std::ostream& os, auto&& graph, auto&& partitions, au
 
 void manual_hopcroft_karp(auto&& graph) {
 	auto partitions = g2x::algo::bipartite_decompose(graph).value();
-	auto matching = g2x::create_edge_labeling(graph, char(false));
+	auto matching = g2x::create_edge_property(graph, char(false));
 
 	while(true) {
 		auto bfs_levels = g2x::algo::detail::hopcroft_karp_bfs_stage(graph, partitions, matching, nullptr);
 		auto aug_set = g2x::algo::find_bipartite_augmenting_set(graph, partitions, matching);
-		auto aug_set_map = g2x::create_edge_labeling(graph, char(false));
+		auto aug_set_map = g2x::create_edge_property(graph, char(false));
 		for(const auto& i: aug_set) {
 			aug_set_map[i] = true;
 		}
@@ -115,7 +115,8 @@ int main() {
 		return gen();
 	};
 
-	auto graph = g2x::graph_gen::random_edges_bipartite_deg(15, 15, 3.0, g_random);
+	auto edges = g2x::graph_gen::average_degree_bipartite_generator(15, 15, 3.0, g_random);
+	auto graph = g2x::create_graph<g2x::basic_graph>(edges);
 
 	manual_hopcroft_karp(graph);
 

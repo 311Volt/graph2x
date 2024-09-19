@@ -64,7 +64,7 @@ namespace g2x {
 		}
 
 		[[nodiscard]] auto outgoing_edges(vertex_id_type u) const {
-			return adj_storage_.at(u) | std::views::transform([&](edge_id_type eid) {return edge_at(eid);});
+			return adj_storage_.at(u) | std::views::transform([this](edge_id_type eid) {return edge_at(eid);});
 		}
 
 		vertex_id_type create_vertex() {

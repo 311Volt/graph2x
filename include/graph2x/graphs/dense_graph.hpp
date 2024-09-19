@@ -117,7 +117,7 @@ namespace g2x {
 		}
 
 		template<typename T>
-		[[nodiscard]] auto create_edge_labeling() const {
+		[[nodiscard]] auto create_edge_property() const {
 			return array_2d<T>(adj_matrix_.width(), adj_matrix_.height());
 		}
 

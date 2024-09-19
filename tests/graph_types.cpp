@@ -227,26 +227,26 @@ namespace {
 
 	}
 
-	TYPED_TEST(graph_types, vertex_labeling) {
+	TYPED_TEST(graph_types, vertex_property) {
 		auto graph = g2x::create_graph<TypeParam>(edge_list{
 			{0,1}, {0,2}, {0,2},
 			{1,2}, {3,1}, {2,4}
 		});
 
-		auto l = g2x::create_vertex_labeling<int>(graph, 311);
+		auto l = g2x::create_vertex_property<int>(graph, 311);
 		for(const auto& v: g2x::all_vertices(graph)) {
 			EXPECT_EQ(l[v], 311);
 		}
 	}
 
 
-	TYPED_TEST(graph_types, edge_labeling) {
+	TYPED_TEST(graph_types, edge_property) {
 		auto graph = g2x::create_graph<TypeParam>(edge_list{
 			{0,1}, {0,2}, {0,2},
 			{1,2}, {3,1}, {2,4}
 		});
 
-		auto l = g2x::create_edge_labeling<int>(graph, 311);
+		auto l = g2x::create_edge_property<int>(graph, 311);
 		for(const auto& [u, v, i]: g2x::all_edges(graph)) {
 			EXPECT_EQ(l[i], 311);
 		}
