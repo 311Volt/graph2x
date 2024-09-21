@@ -124,6 +124,7 @@ namespace g2x {
 				int num_iterations = 0;
 				std::vector<int> aug_path_lengths;
 				std::vector<int> aug_set_sizes;
+				std::vector<int> new_matched_edges_per_step;
 			} hopcroft_karp;
 		}
 
@@ -437,9 +438,11 @@ namespace g2x {
 			
 			auto partitions = bipartite_decompose(graph).value();
 			auto matching = create_edge_property<boolean>(graph, false);
+			int matching_size = 0;
 
 			insights::hopcroft_karp = {};
-			
+
+
 			while(true) {
 				auto aug_set = find_bipartite_augmenting_set(graph, partitions, matching);
 				if(aug_set.empty()) {
@@ -447,10 +450,14 @@ namespace g2x {
 				}
 				insights::hopcroft_karp.aug_set_sizes.push_back(aug_set.size());
 				insights::hopcroft_karp.aug_path_lengths.push_back(insights::hopcroft_karp.longest_augmenting_path);
+				int prev_matching_size = matching_size;
 
 				for(const auto& idx: aug_set) {
 					matching[idx] = !matching[idx];
+					matching_size += matching[idx] ? 1 : -1;
 				}
+
+				insights::hopcroft_karp.new_matched_edges_per_step.push_back(matching_size - prev_matching_size);
 				++insights::hopcroft_karp.num_iterations;
 			}
 			
@@ -476,7 +483,8 @@ namespace g2x {
 			return matching;
 		}
 
-		auto new_max_bipartite_matching(graph auto&& graph) {
+		// Like max_bipartite_matching, but performs slightly better for near-cubic graphs.
+		auto near_cubic_max_bipartite_matching(graph auto&& graph) {
 
 			insights::hopcroft_karp = {};
 

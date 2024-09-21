@@ -4,3 +4,6 @@
 [submodule "googletest"]
 	path = googletest
 	url = https://github.com/google/googletest
+[submodule "reflect"]
+	path = reflect
+	url = https://github.com/qlibs/reflect
