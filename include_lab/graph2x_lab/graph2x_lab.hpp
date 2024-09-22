@@ -82,7 +82,7 @@ namespace g2x::lab {
 		int samples_per_point = 5;
 		TestT test_instance;
 		std::mt19937_64 rng = {};
-		std::function<std::generator<x_axis_type>(void)> x_axis;
+		std::generator<double> x_axis;
 		bool save_to_csv = false;
 		bool save_to_pgfplots = false;
 	};
@@ -118,9 +118,32 @@ namespace g2x::lab {
 	template<typename TestT>
 	using test_run_result_t = std::vector<std::pair<typename TestT::x_axis, typename TestT::y_axis>>;
 
+	inline std::string latex_escape_string(const std::string_view str) {
+		static std::unordered_map<char, std::string> chr_map {
+			{'#', "\\#"},
+			{'$', "\\$"},
+			{'%', "\\%"},
+			{'&', "\\&"},
+			{'~', "\\~{}"},
+			{'_', "\\_"},
+			{'^', "\\^{}"},
+			{'\\', "\\textbackslash{}"},
+			{'{', "\\{"},
+			{'}', "\\}"},
+		};
+		std::string result;
+		for(char c: str) {
+			if(chr_map.contains(c)) {
+				result += chr_map.at(c);
+			} else {
+				result += c;
+			}
+		}
+		return result;
+	}
 
 	template<typename TestT>
-	auto render_to_csv(const std::ostream& os_c, const test_run<TestT>& run, const test_run_result_t<TestT>& results, bool verbose = true) {
+	auto render_to_csv(const std::ostream& os_c, const test_run<TestT>& run, const test_run_result_t<TestT>& results) {
 
 		auto& os = const_cast<std::ostream&>(os_c);
 
@@ -155,13 +178,59 @@ namespace g2x::lab {
 	}
 
 	template<typename TestT>
-	auto render_to_pgfplots(const std::ostream& os_c, const test_run<TestT>& run, const test_run_result_t<TestT>& results, bool verbose = true) {
+	auto render_to_pgfplots(const std::ostream& os_c, const test_run<TestT>& run, const test_run_result_t<TestT>& results) {
 
+		auto& os = const_cast<std::ostream&>(os_c);
+
+		using x_axis_t = typename TestT::x_axis;
+		using y_axis_t = typename TestT::y_axis;
+
+		std::vector<std::string> legend_positions = {"north west", "north east"};
+		std::vector<std::string> plot_colors = {"blue", "red", "green"};
+
+		os << "\\begin{tikzpicture}";
+
+		reflect::for_each<y_axis_t>([&](auto I) {
+
+			os << std::format(R"||||(
+	\begin{{axis}}[
+		title={{ {} }},
+		xlabel={{ {} }},
+		ylabel={{ YLABEL PLACEHOLDER }},
+		legend pos={},
+		ymajorgrids=true,
+		grid style=dashed,
+	]
+	\addplot[
+		color={},
+		mark=square,
+	]
+	coordinates {{
+)||||"
+			, run.title, latex_escape_string(reflect::member_name<0, x_axis_t>()), legend_positions.at(I), plot_colors.at(I));
+
+			for(const auto& [x, y]: results) {
+				os << std::format("({}, {})", reflect::get<0>(x), reflect::get<I>(y));
+			}
+			os << std::format(R"||||(
+	}};
+	\legend{{ {} }}
+
+	\end{{axis}}
+
+)||||"
+			, latex_escape_string(reflect::member_name<I, y_axis_t>()));
+
+
+		});
+
+
+		os << "\\end{tikzpicture}";
 	}
 
 
 	template<typename TestT>
-	test_run_result_t<TestT> execute_test(const test_run<TestT>& run, bool verbose = true) {
+	test_run_result_t<TestT> execute_test(test_run<TestT> run, bool verbose = true) {
 
 		using x_axis_t = typename TestT::x_axis;
 		using y_axis_t = typename TestT::y_axis;
@@ -173,7 +242,8 @@ namespace g2x::lab {
 
 		int i = 0;
 		std::atomic_int tasks_finished = 0;
-		for(const auto& x: run.x_axis()) {
+		for(const auto& x_gen: run.x_axis) {
+			x_axis_t x(x_gen);
 			std::ignore = pool.submit_task([i, x, &tasks_finished, &run, &results, &results_mtx] {
 				{
 					std::scoped_lock lk {results_mtx};
@@ -184,7 +254,7 @@ namespace g2x::lab {
 
 				std::array<average<double>, reflect::size<y_axis_t>()> averages;
 				for(int smp=0; smp<run.samples_per_point; ++smp) {
-					auto y = run.test_instance.eval(x, const_cast<std::mt19937_64&>(run.rng));
+					auto y = run.test_instance.eval(x, run.rng);
 					reflect::for_each([&](auto I) {
 						averages[I].add(reflect::get<I>(y));
 					}, y);
