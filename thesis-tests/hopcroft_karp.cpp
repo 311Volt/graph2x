@@ -69,7 +69,7 @@ int main() {
 			g2x::lab::execute_test<test_hk73_avg_deg_vs_num_phases>({
 				.short_title = std::format("hk73-avg-deg-vs-num-phases_v-{}_f-{:.1f}", num_vtx*2, focus),
 				.title = std::format("Liczba faz i czas w zależności od średniego stopnia $G$ ($|V| = {}*2$)", num_vtx),
-				.samples_per_point = 500,
+				.samples_per_point = 160,
 				.test_instance = {
 					.num_partition_vertices = num_vtx
 				},
@@ -88,11 +88,10 @@ int main() {
 			.test_instance = {
 				.avg_deg = avg_deg
 			},
-			.x_axis = g2x::lab::linspace(1.0, 5.0, 100),
+			.x_axis = g2x::lab::linspace(40.0, 1000.0, 100),
 			.save_to_csv = true,
 			.save_to_pgfplots = true
 		});
 	}
-
 
 }

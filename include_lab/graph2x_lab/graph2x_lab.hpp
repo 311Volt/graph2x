@@ -10,6 +10,7 @@
 #include <reflect>
 #include <BS_thread_pool.hpp>
 #include <iostream>
+#include <fstream>
 #include <random>
 
 #define G2X_ATTR(MemPtr, Value) \
@@ -185,8 +186,9 @@ namespace g2x::lab {
 		using x_axis_t = typename TestT::x_axis;
 		using y_axis_t = typename TestT::y_axis;
 
-		std::vector<std::string> legend_positions = {"north west", "north east"};
+		std::vector<std::string> legend_positions = {"north east", "north west"};
 		std::vector<std::string> plot_colors = {"blue", "red", "green"};
+		std::vector<std::string> axis_y_lines = {"left", "right"};
 
 		os << "\\begin{tikzpicture}";
 
@@ -194,6 +196,7 @@ namespace g2x::lab {
 
 			os << std::format(R"||||(
 	\begin{{axis}}[
+		axis y line*={},
 		title={{ {} }},
 		xlabel={{ {} }},
 		ylabel={{ YLABEL PLACEHOLDER }},
@@ -203,12 +206,14 @@ namespace g2x::lab {
 	]
 	\addplot[
 		color={},
-		mark=square,
+		% mark=square,
 	]
 	coordinates {{
 )||||"
-			, run.title, latex_escape_string(reflect::member_name<0, x_axis_t>()), legend_positions.at(I), plot_colors.at(I));
-
+			, axis_y_lines.at(I), run.title,
+			  latex_escape_string(reflect::member_name<0, x_axis_t>()),
+			  legend_positions.at(I), plot_colors.at(I));
+			os << "\t\t\t";
 			for(const auto& [x, y]: results) {
 				os << std::format("({}, {})", reflect::get<0>(x), reflect::get<I>(y));
 			}
