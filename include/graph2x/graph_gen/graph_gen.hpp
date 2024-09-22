@@ -45,7 +45,7 @@ namespace g2x {
 			);
 		}
 
-		inline auto iota_random_combination(isize bound, isize samples, auto&& generator) {
+		inline auto iota_random_combination(isize bound, isize samples, auto& generator) {
 			auto iota_view = std::views::iota(0, bound);
 			std::vector<isize> combination(samples);
 			std::ranges::sample(iota_view, combination.begin(), samples, generator);

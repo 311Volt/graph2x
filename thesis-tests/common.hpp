@@ -14,7 +14,7 @@
 
 namespace mgr {
 
-	void save_test_results(std::ranges::range auto&& results, std::ostream& os = std::cout) {
+	void save_test_results_csv(std::ranges::range auto&& results, std::ostream& os = std::cout) {
 
 		using row_type = std::ranges::range_value_t<decltype(results)>;
 
@@ -38,9 +38,9 @@ namespace mgr {
 
 	}
 
-	void save_test_results(std::ranges::range auto&& results, const std::string& filename) {
+	void save_test_results_csv(std::ranges::range auto&& results, const std::string& filename) {
 		std::ofstream os(filename);
-		save_test_results(results, os);
+		save_test_results_csv(results, os);
 	}
 
 

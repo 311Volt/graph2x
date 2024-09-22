@@ -7,3 +7,6 @@
 [submodule "reflect"]
 	path = reflect
 	url = https://github.com/qlibs/reflect
+[submodule "thread-pool"]
+	path = thread-pool
+	url = https://github.com/bshoshany/thread-pool

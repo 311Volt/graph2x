@@ -2,6 +2,8 @@
 #include <fstream>
 
 #include "common.hpp"
+#include "graph2x_lab/graph2x_lab.hpp"
+
 
 
 struct hk73_result {
@@ -28,7 +30,7 @@ auto test_hopcroft_karp(g2x::graph auto&& graph) {
 }
 
 
-auto test_hk73_avg_deg_vs_num_phases(int samples, int part_size, double min, double max, double step) {
+auto test_hk73_avg_deg_vs_num_phases_fn(int samples, int part_size, double min, double max, double step) {
 	std::mt19937_64 rng {311};
 	std::vector<hk73_result> results;
 
@@ -131,45 +133,102 @@ auto test_hk73_ad3_size_vs_max_num_phases(int samples, int psize_min, int psize_
 
 
 
+struct hk73_bench_result {
+	int num_vertices;
+	int num_edges;
+	double impl1_avg_time_us;
+	double impl2_avg_time_us;
+};
+
+auto benchmark_matching_function(int samples, int num_vertices, int num_edges) {
+	std::mt19937_64 rng{311};
+
+	static volatile unsigned sink = 0;
+	mgr::average<double> avg_time1_s, avg_time2_s;
+	for(int i=0; i<samples; i++) {
+		auto edges = g2x::graph_gen::edge_cardinality_bipartite_generator(num_vertices/2, num_vertices/2, num_edges, rng);
+		auto graph = g2x::create_graph<g2x::basic_graph>(edges);
+
+		mgr::stopwatch sw;
+		auto matching1 = g2x::algo::max_bipartite_matching(graph);
+		sink += std::ranges::distance(matching1);
+
+		avg_time1_s.add(sw.peek());
+
+		sw = {};
+		auto matching2 = g2x::algo::max_bipartite_matching(graph);
+		sink += std::ranges::distance(matching2);
+
+		avg_time2_s.add(sw.peek());
+
+	}
+
+	return hk73_bench_result {
+		.num_vertices = num_vertices,
+		.num_edges = num_edges,
+		.impl1_avg_time_us = avg_time1_s.get() * 1000000.0,
+		.impl2_avg_time_us = avg_time2_s.get() * 1000000.0
+	};
+}
+
+auto test_hk73_num_v_vs_time(int samples, double avg_deg, int psize_min, int psize_max, int psize_step) {
+	std::vector<hk73_bench_result> results;
+
+	for(int psize=psize_min; psize<psize_max; psize+=psize_step) {
+		std::println("s={}", psize);
+		results.push_back(benchmark_matching_function(samples, psize*2, psize*avg_deg));
+	}
+
+	return results;
+}
+
+
+struct test_hk73_avg_deg_vs_num_phases {
+
+	int num_partition_vertices;
+
+	struct x_axis {
+		double average_degree;
+	};
+
+	struct y_axis {
+		double time_us;
+		double num_phases;
+	};
+
+	y_axis eval(const x_axis& x, auto&& rng) const {
+		auto edges = g2x::graph_gen::average_degree_bipartite_generator(
+			num_partition_vertices, num_partition_vertices, x.average_degree, rng);
+		auto graph = g2x::create_graph<g2x::basic_graph>(edges);
+		g2x::lab::stopwatch sw;
+		auto matching = g2x::algo::max_bipartite_matching(graph);
+		return {
+			.time_us = 1000000.0 * sw.peek(),
+			.num_phases = g2x::algo::insights::hopcroft_karp.num_iterations * 1.0,
+		};
+	}
+
+};
+
+
+
 int main() {
-	goto tests_begin;
 
-	mgr::save_test_results(
-		test_hk73_avg_deg_vs_num_phases(100, 100, 1.0, 5.0, 0.01),
-		"impl1_test_100_coarse.csv"
-	);
-	mgr::save_test_results(
-		test_hk73_avg_deg_vs_num_phases(100, 300, 1.0, 5.0, 0.01),
-		"impl1_test_300_coarse.csv"
-	);
-	mgr::save_test_results(
-		test_hk73_avg_deg_vs_num_phases(100, 1000, 1.0, 5.0, 0.01),
-		"impl1_test_1000_coarse.csv"
-	);
-
-
-	mgr::save_test_results(
-		test_hk73_avg_deg_vs_num_phases(1000, 100, 2.7, 3.3, 0.002),
-		"impl1_test_100_fine.csv"
-	);
-	mgr::save_test_results(
-		test_hk73_avg_deg_vs_num_phases(300, 300, 2.7, 3.3, 0.002),
-		"impl1_test_300_fine.csv"
-	);
-	mgr::save_test_results(
-		test_hk73_avg_deg_vs_num_phases(100, 1000, 2.7, 3.3, 0.002),
-		"impl1_test_1000_fine.csv"
-	);
-	tests_begin:
-	mgr::save_test_results(
-		test_hk73_ad3_size_vs_num_phases(33, 10, 3000, 10),
-		"impl1_test_size_vs_num_phases.csv"
-	);
-
-	mgr::save_test_results(
-		test_hk73_ad3_size_vs_max_num_phases(33, 10, 3000, 10),
-		"impl1_test_size_vs_max_num_phases.csv"
-	);
+	g2x::lab::execute_test<test_hk73_avg_deg_vs_num_phases>({
+		.short_title = "hk73-test-test",
+		.title = "This is a test",
+		.samples_per_point = 50,
+		.test_instance = {
+			.num_partition_vertices = 100
+		},
+		.x_axis = [num = 1000]() -> std::generator<test_hk73_avg_deg_vs_num_phases::x_axis> {
+			for(int i=0; i<num; i++) {
+				co_yield {.average_degree = g2x::lab::linspace_at(1.0, 5.0, num, i)};
+			}
+		},
+		.save_to_csv = true,
+		.save_to_pgfplots = true
+	});
 
 
 }
