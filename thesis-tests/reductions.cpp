@@ -72,7 +72,7 @@ int main() {
 	});
 
 	g2x::lab::execute_test<test_red_subcubic_vertex_inflation>({
-		.short_title = "biconnected-edge-inflation_v-400",
+		.short_title = "subcubic-edge-inflation_v-400",
 		.title = "Przyrost grafu po redukcji do grafu podkubicznego ($|V| = 400$)",
 		.samples_per_point = 100,
 		.test_instance = {
@@ -82,4 +82,4 @@ int main() {
 		.save_to_csv = true,
 		.save_to_pgfplots = true
 	});
-}
+}h

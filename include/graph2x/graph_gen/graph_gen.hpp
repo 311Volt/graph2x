@@ -154,30 +154,6 @@ namespace g2x {
 		}
 
 
-
-
-		// inline auto random_edges_card(isize num_vertices, isize num_edges, bool allow_loops, auto&& generator) {
-		// 	isize num_edges_complete = detail::complete_graph_num_edges(num_vertices, allow_loops);
-		// 	double density = num_edges / num_edges_complete;
-		// 	return random_edges(num_vertices, density, allow_loops, generator);
-		// }
-		//
-		// inline auto random_edges_deg(isize num_vertices, double avg_deg, bool allow_loops, auto&& generator) {
-		// 	isize num_edges_complete = detail::complete_graph_num_edges(num_vertices, allow_loops);
-		// 	double density = avg_deg * num_vertices / (2.0f*num_edges_complete);
-		// 	return random_edges(num_vertices, density, allow_loops, generator);
-		// }
-		//
-		// inline auto random_edges_bipartite_card(int v1, int v2, int num_edges, auto&& generator) {
-		// 	double density = num_edges / (1.0f*v1*v2);
-		// 	return random_edges_bipartite(v1, v2, density, generator);
-		// }
-		//
-		// inline auto random_edges_bipartite_deg(int v1, int v2, double avg_deg, auto&& generator) {
-		// 	double density = avg_deg * (v1+v2) / (2.0f*v1*v2);
-		// 	return random_edges_bipartite(v1, v2, density, generator);
-		// }
-
 	}
 
 }

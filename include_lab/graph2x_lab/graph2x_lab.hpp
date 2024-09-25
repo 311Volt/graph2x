@@ -82,7 +82,6 @@ namespace g2x::lab {
 		std::string title;
 		int samples_per_point = 5;
 		TestT test_instance;
-		std::mt19937_64 rng = {};
 		std::generator<double> x_axis;
 		bool save_to_csv = false;
 		bool save_to_pgfplots = false;
@@ -186,9 +185,9 @@ namespace g2x::lab {
 		using x_axis_t = typename TestT::x_axis;
 		using y_axis_t = typename TestT::y_axis;
 
-		std::vector<std::string> legend_positions = {"north east", "north west"};
-		std::vector<std::string> plot_colors = {"blue", "red", "green"};
-		std::vector<std::string> axis_y_lines = {"left", "right"};
+		std::vector<std::string> legend_positions = {"north east", "north west", "north east", "north west"};
+		std::vector<std::string> plot_colors = {"blue", "red", "green", "red"};
+		std::vector<std::string> axis_y_lines = {"left", "right", "left", "right"};
 
 		os << "\\begin{tikzpicture}";
 
@@ -196,6 +195,9 @@ namespace g2x::lab {
 
 			os << std::format(R"||||(
 	\begin{{axis}}[
+		/pgf/number format/.cd,
+        use comma,
+        1000 sep={{}},
 		axis y line*={},
 		title={{ {} }},
 		xlabel={{ {} }},
@@ -203,6 +205,7 @@ namespace g2x::lab {
 		legend pos={},
 		ymajorgrids=true,
 		grid style=dashed,
+		scaled ticks=false,
 	]
 	\addplot[
 		color={},
@@ -233,6 +236,8 @@ namespace g2x::lab {
 		os << "\\end{tikzpicture}";
 	}
 
+	inline thread_local std::mt19937_64 g_random {};
+
 
 	template<typename TestT>
 	test_run_result_t<TestT> execute_test(test_run<TestT> run, bool verbose = true) {
@@ -259,7 +264,7 @@ namespace g2x::lab {
 
 				std::array<average<double>, reflect::size<y_axis_t>()> averages;
 				for(int smp=0; smp<run.samples_per_point; ++smp) {
-					auto y = run.test_instance.eval(x, run.rng);
+					auto y = run.test_instance.eval(x, g_random);
 					reflect::for_each([&](auto I) {
 						averages[I].add(reflect::get<I>(y));
 					}, y);

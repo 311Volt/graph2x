@@ -49,11 +49,22 @@ if(GRAPH2X_BUILD_GRAPHICAL_EXAMPLES)
 endif ()
 
 
+find_package(Boost REQUIRED COMPONENTS graph)
+
 add_executable(g2x_thesis_test_hopcroft_karp "thesis-tests/hopcroft_karp.cpp" "thesis-tests/common.hpp")
 target_link_libraries(g2x_thesis_test_hopcroft_karp PRIVATE graph2x graph2x_lab)
 
 add_executable(g2x_thesis_test_reductions "thesis-tests/reductions.cpp" "thesis-tests/common.hpp")
 target_link_libraries(g2x_thesis_test_reductions PRIVATE graph2x graph2x_lab)
+
+add_executable(g2x_thesis_test_hk73_edge_strategies "thesis-tests/hk73_edge_strategies.cpp" "thesis-tests/common.hpp")
+target_link_libraries(g2x_thesis_test_hk73_edge_strategies PRIVATE graph2x graph2x_lab)
+
+if(Boost_FOUND)
+	add_executable(g2x_thesis_test_g2x_perf "thesis-tests/g2x_perf.cpp" "thesis-tests/common.hpp")
+	target_link_libraries(g2x_thesis_test_g2x_perf PRIVATE graph2x graph2x_lab Boost::graph)
+endif ()
+
 
 
 

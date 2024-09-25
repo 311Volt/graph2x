@@ -312,6 +312,7 @@ namespace g2x {
 		auto simple_edges_bfs(const GraphT& graph, IdxOrRangeT&& start = {}) {
 			breadth_first_search bfs(graph);
 			generic_init_search(bfs, start);
+			bfs.expect_up_to(num_vertices(graph));
 			return detail::rust_like_range([bfs = std::move(bfs)]() mutable {
 				return bfs.next_edge();
 			});
@@ -321,6 +322,7 @@ namespace g2x {
 		auto simple_vertices_bfs(const GraphT& graph, IdxOrRangeT&& start = {}) {
 			breadth_first_search bfs(graph);
 			generic_init_search(bfs, start);
+			bfs.expect_up_to(num_vertices(graph));
 			return detail::rust_like_range([bfs = std::move(bfs)]() mutable {
 				return bfs.next_vertex();
 			});
@@ -330,6 +332,7 @@ namespace g2x {
 		auto simple_edges_dfs(const GraphT& graph, IdxOrRangeT&& start = {}) {
 			depth_first_search dfs(graph);
 			generic_init_search(dfs, start);
+			dfs.expect_up_to(num_vertices(graph));
 			return detail::rust_like_range([dfs = std::move(dfs)]() mutable {
 				return dfs.next_edge();
 			});
@@ -339,6 +342,7 @@ namespace g2x {
 		auto simple_vertices_dfs(const GraphT& graph, IdxOrRangeT&& start = {}) {
 			depth_first_search dfs(graph);
 			generic_init_search(dfs, start);
+			dfs.expect_up_to(num_vertices(graph));
 			return detail::rust_like_range([dfs = std::move(dfs)]() mutable {
 				return dfs.next_vertex();
 			});
